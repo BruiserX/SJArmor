@@ -1,7 +1,8 @@
 Config = {}
 
--- Armor slot number (Only if using drag and drop equipping)
-Config.ArmorSlot = 32
+-- Equipping system configuration
+Config.UseDragAndDrop = true -- Set to false if using button-based equipping
+Config.ArmorSlot = 32 -- Armor slot number (Only used if UseDragAndDrop = true)
 
 -- Plate data configuration
 -- NOTE: All plates start at 100% durability and degrade based on their durability rating
