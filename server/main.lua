@@ -781,7 +781,6 @@ end)
 
 RegisterNetEvent('sjarmor:unequipPlateCarrier', function()
     local source = source
-    print(string.format('[SJArmor] Unequip request from player %d', source))
     
     if not playerArmorData[source] then
         TriggerClientEvent('sjarmor:unequipArmorResponse', source, false, 'No plate carrier equipped')
@@ -805,7 +804,6 @@ RegisterNetEvent('sjarmor:unequipPlateCarrier', function()
         local metadata = item.metadata or {}
         metadata.equipped = false 
         metadata.unequipped = true 
-        print(string.format('[SJArmor] Setting unequipped flags for %s in slot %d', item.name, armorData.carrierSlot))
         exports.ox_inventory:SetMetadata(source, armorData.carrierSlot, metadata)
     end
     
@@ -971,7 +969,6 @@ end)
 
 AddEventHandler('playerJoining', function()
     local source = source
-    print(string.format('[SJArmor] Player %d joining, checking for plate carriers...', source))
     
     SetTimeout(3000, function()
         if not playerArmorData[source] then
@@ -979,7 +976,6 @@ AddEventHandler('playerJoining', function()
             if playerInv and playerInv.items then
                 for slot, item in pairs(playerInv.items) do
                     if item and ContainerConfigs[item.name] and item.metadata and item.metadata.stashId then
-                        print(string.format('[SJArmor] Found plate carrier %s in slot %d, equipped flag: %s, unequipped flag: %s', item.name, slot, tostring(item.metadata.equipped), tostring(item.metadata.unequipped)))
                         local isEquipped = false
                         
                         local stashInv = exports.ox_inventory:GetInventory(item.metadata.stashId, false)
@@ -1109,7 +1105,6 @@ end
 
 AddEventHandler('onResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() then
-        print('[SJArmor] Resource started, will detect equipped carriers in 2 seconds...')
         SetTimeout(2000, function()
             detectEquippedCarriers()
         end)
