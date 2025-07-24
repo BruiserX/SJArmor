@@ -136,6 +136,7 @@ Add the following items to your ox_inventory `data/items.lua` file:
 
 **Option 1: Drag & Drop Only (Recommended for custom ox_inventory setups)**
 ```
+-- Enable "Config.UseDragAndDrop = true"
 -- Remove the "Equip Plate Carrier" and "Unequip Plate Carrier" buttons from items above
 -- Keep only "Open Plate Carrier" button
 -- Specify inventory slot in Config.ArmorSlot
@@ -143,6 +144,7 @@ Add the following items to your ox_inventory `data/items.lua` file:
 
 **Option 2: Button-Based Equipping (Standard ox_inventory)**
 ```
+-- Disable "Config.UseDragAndDrop = false"
 -- Use all buttons as shown above (Open, Equip, Unequip)
 ```
 
