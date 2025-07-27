@@ -90,19 +90,19 @@ To add new plate carrier types (vests), you need to update multiple files:
         {
             label = 'Open Plate Carrier',
             action = function(slot)
-                exports.sjarmor:openPlateCarrier(slot, 'mediumpc')
+                exports.SJArmor:openPlateCarrier(slot, 'mediumpc')
             end
         },
         {
             label = 'Equip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:equipPlateCarrier(slot, 'mediumpc')
+                exports.SJArmor:equipPlateCarrier(slot, 'mediumpc')
             end
         },
         {
             label = 'Unequip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:unequipPlateCarrier()
+                exports.SJArmor:unequipPlateCarrier()
             end
         }
     }
