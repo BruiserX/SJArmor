@@ -62,19 +62,19 @@ Add the following items to your ox_inventory `data/items.lua` file:
         {
             label = 'Open Plate Carrier',
             action = function(slot)
-                exports.sjarmor:openPlateCarrier(slot, 'heavypc')
+                exports.SJArmor:openPlateCarrier(slot, 'heavypc')
             end
         },
         {
             label = 'Equip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:equipPlateCarrier(slot, 'heavypc')
+                exports.SJArmor:equipPlateCarrier(slot, 'heavypc')
             end
         },
         {
             label = 'Unequip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:unequipPlateCarrier()
+                exports.SJArmor:unequipPlateCarrier()
             end
         }
     }
@@ -90,19 +90,19 @@ Add the following items to your ox_inventory `data/items.lua` file:
         {
             label = 'Open Plate Carrier',
             action = function(slot)
-                exports.sjarmor:openPlateCarrier(slot, 'lightpc')
+                exports.SJArmor:openPlateCarrier(slot, 'lightpc')
             end
         },
         {
             label = 'Equip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:equipPlateCarrier(slot, 'lightpc')
+                exports.SJArmor:equipPlateCarrier(slot, 'lightpc')
             end
         },
         {
             label = 'Unequip Plate Carrier',
             action = function(slot)
-                exports.sjarmor:unequipPlateCarrier()
+                exports.SJArmor:unequipPlateCarrier()
             end
         }
     }
@@ -130,7 +130,7 @@ Add the following items to your ox_inventory `data/items.lua` file:
    - Edit `shared/config.lua` in sjarmor
 
 5. **Start Resource**:
-   - Add `start sjarmor` to your server.cfg
+   - Add `start SJArmor` to your server.cfg
 
 ## Button Configuration Guide:
 
