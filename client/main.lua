@@ -2,8 +2,9 @@ local currentArmorData = {}
 local isArmorMonitoringActive = false
 local isUnequipping = false
 local isServerUpdatingArmor = false
+local savedKevlarComponent = nil
+local isVestApplied = false
 
--- Export function to open plate carrier stash
 function openPlateCarrier(slot, carrierType)
     lib.notify({
         type = 'inform',
@@ -13,11 +14,10 @@ function openPlateCarrier(slot, carrierType)
     exports.ox_inventory:closeInventory()
     
     SetTimeout(100, function()
-        TriggerServerEvent('sjarmor:openPlateCarrier', slot, carrierType)
+        TriggerServerEvent('SJArmor:openPlateCarrier', slot, carrierType)
     end)
 end
 
--- Export function to equip plate carrier (for button use)
 function equipPlateCarrier(slot, carrierType)
     local success = lib.progressCircle({
         label = Config.EquipSettings.progressText,
@@ -35,11 +35,10 @@ function equipPlateCarrier(slot, carrierType)
     })
     
     if success then
-        TriggerServerEvent('sjarmor:equipPlateCarrier', slot, carrierType)
+        TriggerServerEvent('SJArmor:equipPlateCarrier', slot, carrierType)
     end
 end
 
--- Export function to unequip plate carrier (for button use)
 function unequipPlateCarrier()
     local success = lib.progressCircle({
         label = Config.UnequipSettings.progressText,
@@ -57,17 +56,15 @@ function unequipPlateCarrier()
     })
     
     if success then
-        TriggerServerEvent('sjarmor:unequipPlateCarrier')
+        TriggerServerEvent('SJArmor:unequipPlateCarrier')
     end
 end
 
--- Register exports
 exports('openPlateCarrier', openPlateCarrier)
 exports('equipPlateCarrier', equipPlateCarrier)
 exports('unequipPlateCarrier', unequipPlateCarrier)
 
--- Handle equipping plate carrier from server
-RegisterNetEvent('sjarmor:equipArmorResponse', function(success, armorData, message, targetArmor)
+RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, message, targetArmor)
     if success then
         isUnequipping = false
         
@@ -79,6 +76,29 @@ RegisterNetEvent('sjarmor:equipArmorResponse', function(success, armorData, mess
         
         SetPlayerMaxArmour(cache.serverId, 100)
         SetPedArmour(cache.ped, targetArmor or 0)
+
+        local ped = cache.ped or PlayerPedId()
+        if DoesEntityExist(ped) then
+            local kevlarComponentId = 9
+            local desiredDrawable = (armorData and armorData.vestDrawable)
+                or ((armorData and armorData.carrierType) == 'lightpc' and 182)
+                or ((armorData and armorData.carrierType) == 'heavypc' and 183)
+                or nil
+            if desiredDrawable then
+                if not isVestApplied then
+                    local currentDrawable = GetPedDrawableVariation(ped, kevlarComponentId)
+                    local currentTexture = GetPedTextureVariation(ped, kevlarComponentId)
+                    local currentPalette = GetPedPaletteVariation(ped, kevlarComponentId)
+                    savedKevlarComponent = {
+                        drawable = currentDrawable,
+                        texture = currentTexture,
+                        palette = currentPalette
+                    }
+                end
+                SetPedComponentVariation(ped, kevlarComponentId, desiredDrawable, 0, 0)
+                isVestApplied = true
+            end
+        end
         
         SetTimeout(1000, function()
             isServerUpdatingArmor = false
@@ -102,8 +122,7 @@ RegisterNetEvent('sjarmor:equipArmorResponse', function(success, armorData, mess
     end
 end)
 
--- Handle unequipping plate carrier from server
-RegisterNetEvent('sjarmor:unequipArmorResponse', function(success, message, targetArmor)
+RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor)
     if success then
         isUnequipping = true
         
@@ -114,6 +133,13 @@ RegisterNetEvent('sjarmor:unequipArmorResponse', function(success, message, targ
         
         SetPlayerMaxArmour(cache.serverId, 100)
         SetPedArmour(cache.ped, targetArmor or 0)
+
+        local ped = cache.ped or PlayerPedId()
+        if DoesEntityExist(ped) and isVestApplied and savedKevlarComponent then
+            SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+        end
+        savedKevlarComponent = nil
+        isVestApplied = false
         
         SetTimeout(100, function()
             isUnequipping = false
@@ -134,8 +160,7 @@ RegisterNetEvent('sjarmor:unequipArmorResponse', function(success, message, targ
     end
 end)
 
--- Handle armor updates from server
-RegisterNetEvent('sjarmor:updateArmor', function(armorData, targetArmor)
+RegisterNetEvent('SJArmor:updateArmor', function(armorData, targetArmor)
     if armorData.virtualArmor > 0 then
         isUnequipping = false
     end
@@ -160,8 +185,7 @@ RegisterNetEvent('sjarmor:updateArmor', function(armorData, targetArmor)
     end
 end)
 
--- Handle plate breaking notification
-RegisterNetEvent('sjarmor:plateBroken', function(plateName)
+RegisterNetEvent('SJArmor:plateBroken', function(plateName)
     lib.notify({
         type = 'inform',
         icon = 'shield-crack',
@@ -170,8 +194,7 @@ RegisterNetEvent('sjarmor:plateBroken', function(plateName)
     })
 end)
 
--- Handle all plates broken notification
-RegisterNetEvent('sjarmor:allPlatesBroken', function()
+RegisterNetEvent('SJArmor:allPlatesBroken', function()
     lib.notify({
         type = 'inform',
         icon = 'shield-halved',
@@ -180,8 +203,7 @@ RegisterNetEvent('sjarmor:allPlatesBroken', function()
     })
 end)
 
--- Handle forced unequip
-RegisterNetEvent('sjarmor:forceUnequip', function()
+RegisterNetEvent('SJArmor:forceUnequip', function()
     
     isUnequipping = true
     
@@ -190,6 +212,13 @@ RegisterNetEvent('sjarmor:forceUnequip', function()
     
     SetPlayerMaxArmour(cache.serverId, 100)
     SetPedArmour(cache.ped, 0)
+
+    local ped = cache.ped or PlayerPedId()
+    if DoesEntityExist(ped) and isVestApplied and savedKevlarComponent then
+        SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+    end
+    savedKevlarComponent = nil
+    isVestApplied = false
     
     SetTimeout(100, function()
         isUnequipping = false
@@ -225,7 +254,7 @@ function startArmorMonitoring()
                 
 
                 if damageAmount >= math.max(Config.DamageSettings.minimumDamageThreshold, 5) then
-                    TriggerServerEvent('sjarmor:armorDamaged', damageAmount)
+                    TriggerServerEvent('SJArmor:armorDamaged', damageAmount)
                     lastDamageTime = currentTime
                 else
                 end
@@ -254,14 +283,13 @@ function stopArmorMonitoring()
     end
 end
 
--- Stop monitoring when resource stops
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName == GetCurrentResourceName() then
         stopArmorMonitoring()
     end
 end)
 
--- Listen for armor slot changes
+
 RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
     if action == 'equipped' and item then
         local carrierType = nil
@@ -286,9 +314,9 @@ RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
             })
             
             if success then
-                TriggerServerEvent('sjarmor:equipPlateCarrierFromSlot', item.slot, item.metadata, carrierType)
+                TriggerServerEvent('SJArmor:equipPlateCarrierFromSlot', item.slot, item.metadata, carrierType)
             else
-                TriggerServerEvent('sjarmor:cancelEquip', item.slot)
+                TriggerServerEvent('SJArmor:cancelEquip', item.slot)
             end
         end
     elseif action == 'unequipped' then
@@ -308,13 +336,12 @@ RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
         })
         
         if success then
-            TriggerServerEvent('sjarmor:unequipPlateCarrier')
+            TriggerServerEvent('SJArmor:unequipPlateCarrier')
         end
     end
 end)
 
--- Handle starting equip progress for drag-to-slot
-RegisterNetEvent('sjarmor:startEquipProgress', function(targetSlot, metadata, carrierType)
+RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, carrierType)
     
     exports.ox_inventory:closeInventory()
     
@@ -334,14 +361,13 @@ RegisterNetEvent('sjarmor:startEquipProgress', function(targetSlot, metadata, ca
     })
     
     if success then
-        TriggerServerEvent('sjarmor:equipPlateCarrierFromSlot', targetSlot, metadata, carrierType)
+        TriggerServerEvent('SJArmor:equipPlateCarrierFromSlot', targetSlot, metadata, carrierType)
     else
-        TriggerServerEvent('sjarmor:cancelEquipAndMoveBack', targetSlot, metadata, carrierType)
+        TriggerServerEvent('SJArmor:cancelEquipAndMoveBack', targetSlot, metadata, carrierType)
     end
 end)
 
--- Handle starting unequip progress for drag-away-from-slot
-RegisterNetEvent('sjarmor:startUnequipProgress', function(fromSlot, metadata, carrierType)
+RegisterNetEvent('SJArmor:startUnequipProgress', function(fromSlot, metadata, carrierType)
     
     exports.ox_inventory:closeInventory()
     
@@ -361,9 +387,9 @@ RegisterNetEvent('sjarmor:startUnequipProgress', function(fromSlot, metadata, ca
     })
     
     if success then
-        TriggerServerEvent('sjarmor:unequipPlateCarrier')
+        TriggerServerEvent('SJArmor:unequipPlateCarrier')
     else
         
-        TriggerServerEvent('sjarmor:cancelUnequipAndMoveBack', fromSlot, metadata, carrierType)
+        TriggerServerEvent('SJArmor:cancelUnequipAndMoveBack', fromSlot, metadata, carrierType)
     end
 end) 

@@ -126,8 +126,8 @@ Add the following items to your ox_inventory `data/items.lua` file:
    - heavypc.png
    - lightpc.png
 
-4. **Configure sjarmor**: 
-   - Edit `shared/config.lua` in sjarmor
+4. **Configure SJArmor**: 
+   - Edit `shared/config.lua` in SJArmor
 
 5. **Start Resource**:
    - Add `start SJArmor` to your server.cfg

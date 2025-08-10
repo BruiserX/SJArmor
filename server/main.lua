@@ -1,10 +1,7 @@
 local playerArmorData = {} 
 local registeredStashes = {} 
-
--- Load container configurations from data/containers.lua
 local ContainerConfigs = require('data.containers')
 
--- Calculate total virtual armor from plates in a stash
 local function calculateVirtualArmor(stashInventory)
     local totalArmor = 0
     local plateCount = 0
@@ -67,14 +64,11 @@ local function updatePlateCarrierWeight(playerId, carrierSlot, stashId)
         end
     end
     
-    -- Update the weight
     updatedMetadata.weight = newWeight
     
-    -- Use SetMetadata with the fresh metadata table
     exports.ox_inventory:SetMetadata(playerId, carrierSlot, updatedMetadata)
 end
 
--- Get the plate with highest tier (most durable) that has durability > 0
 local function getNextPlateToBreak(stashInventory)
     if not stashInventory or not stashInventory.items then return nil end
     
@@ -105,7 +99,6 @@ local function createPlateCarrierStash(playerId, carrierType, itemSlot)
     local timestamp = os.time()
     local stashId = ('%s_%s_%d_%d'):format(ContainerConfigs[carrierType].stashPrefix, identifier, itemSlot, timestamp)
     
-    -- Register the stash in ox_inventory
     local carrierConfig = ContainerConfigs[carrierType]
     exports.ox_inventory:RegisterStash(stashId, carrierConfig.label, carrierConfig.plateSlots, 50000, identifier, {})
     
@@ -118,12 +111,10 @@ local function createPlateCarrierStash(playerId, carrierType, itemSlot)
     return stashId
 end
 
--- Hook to initialize item metadata when created (plates + plate carriers)
 exports.ox_inventory:registerHook('createItem', function(payload)
     local item = payload.item
     local metadata = payload.metadata or {}
     
-    -- Handle plate durability initialization
     if Config.Plates[item.name] then
         local plateConfig = Config.Plates[item.name]
         
@@ -140,7 +131,6 @@ exports.ox_inventory:registerHook('createItem', function(payload)
         local carrierConfig = ContainerConfigs[item.name]
         
         if not metadata.stashId then
-            -- Generate unique stash ID
             local timestamp = os.time()
             local stashId = ('%s%d_%d'):format(carrierConfig.stashPrefix, timestamp, math.random(100000, 999999))
             
@@ -154,7 +144,6 @@ exports.ox_inventory:registerHook('createItem', function(payload)
             }
         end
         
-        -- Initialize armor metadata
         if not metadata.virtualArmor then metadata.virtualArmor = 0 end
         if not metadata.plateCount then metadata.plateCount = 0 end
         if not metadata.weight then metadata.weight = carrierConfig.baseWeight end
@@ -172,7 +161,6 @@ end, {
     }
 })
 
--- Hook for plate carrier equipping (drag to armor slot)
 exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromInv = payload.fromInventory
     local toInv = payload.toInventory
@@ -186,7 +174,6 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
     
     if type(toInv) == 'number' and toInv == source and toSlot == Config.ArmorSlot then
         if item and ContainerConfigs[item.name] then            
-            -- Check if player already has a plate carrier equipped
             if playerArmorData[source] then
                 TriggerClientEvent('ox_lib:notify', source, {
                     type = 'error',
@@ -196,7 +183,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             end
             
             SetTimeout(100, function()
-                TriggerClientEvent('sjarmor:startEquipProgress', source, toSlot, item.metadata, item.name)
+                TriggerClientEvent('SJArmor:startEquipProgress', source, toSlot, item.metadata, item.name)
             end)
             
             return true  
@@ -218,7 +205,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 playerArmorData[source].unequipInProgress = true
                 
         SetTimeout(100, function()
-                    TriggerClientEvent('sjarmor:startUnequipProgress', source, Config.ArmorSlot, item.metadata, item.name)
+                    TriggerClientEvent('SJArmor:startUnequipProgress', source, Config.ArmorSlot, item.metadata, item.name)
                 end)
                 
                 SetTimeout(5000, function()
@@ -244,7 +231,6 @@ end, {
     }
 })
 
--- Hook to restrict items that can be placed in plate carrier stashes
 exports.ox_inventory:registerHook('swapItems', function(payload)
     local toInv = payload.toInventory
     local item = payload.fromSlot
@@ -273,7 +259,6 @@ end, {
     }
 })
 
--- Hook to detect when button-equipped plate carriers are moved out of player inventory
 exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromInv = payload.fromInventory
     local toInv = payload.toInventory  
@@ -303,7 +288,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                         
                         if not stillInPlayerInv then
                             playerArmorData[source] = nil
-                            TriggerClientEvent('sjarmor:forceUnequip', source)
+                            TriggerClientEvent('SJArmor:forceUnequip', source)
                             TriggerClientEvent('ox_lib:notify', source, {
                                 type = 'inform',
                                 icon = 'shield-halved',
@@ -324,7 +309,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 SetTimeout(100, function()
                     if playerArmorData[source] and playerArmorData[source].stashId == item.metadata.stashId then
                         playerArmorData[source] = nil
-                        TriggerClientEvent('sjarmor:forceUnequip', source)
+                        TriggerClientEvent('SJArmor:forceUnequip', source)
                         TriggerClientEvent('ox_lib:notify', source, {
                             type = 'inform',
                             icon = 'shield-halved',
@@ -378,7 +363,6 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 local playerInv = exports.ox_inventory:GetInventory(source)
                 local owner = playerInv and playerInv.owner
                 
-                -- Register the stash
                 registeredStashes[baseStashId] = {
                     owner = owner,
                     type = carrierType,
@@ -462,9 +446,9 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                                     end
                                     
                                     if oldVirtualArmor <= 0 and newVirtualArmor > 0 then
-                                        TriggerClientEvent('sjarmor:equipArmorResponse', source, true, playerArmorData[source], ('Armor restored! %d plates (%d virtual armor)'):format(newPlateCount, newVirtualArmor), targetArmor)
+                                        TriggerClientEvent('SJArmor:equipArmorResponse', source, true, playerArmorData[source], ('Armor restored! %d plates (%d virtual armor)'):format(newPlateCount, newVirtualArmor), targetArmor)
                                     else
-                                        TriggerClientEvent('sjarmor:updateArmor', source, playerArmorData[source], targetArmor)
+                                        TriggerClientEvent('SJArmor:updateArmor', source, playerArmorData[source], targetArmor)
                                     end
                                 end
                             end
@@ -528,7 +512,6 @@ end, {
     }
 })
 
--- Fix plate carrier stash for items missing stashId
 function fixPlateCarrierStash(source, slot, carrierType)
     local playerInv = exports.ox_inventory:GetInventory(source)
     if not playerInv or not playerInv.items or not playerInv.items[slot] then
@@ -576,12 +559,12 @@ function fixPlateCarrierStash(source, slot, carrierType)
     return false, nil
 end
 
-RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
+RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType)
     local source = source
     local playerInv = exports.ox_inventory:GetInventory(source)
     
     if not playerInv or not playerInv.items[slot] then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Invalid plate carrier')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Invalid plate carrier')
         return
     end
     
@@ -601,13 +584,13 @@ RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
                 metadata = updatedItem.metadata
             end
         else
-            TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Failed to fix plate carrier storage')
+            TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Failed to fix plate carrier storage')
             return
         end
     end
     
     if playerArmorData[source] then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'You already have a plate carrier equipped')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'You already have a plate carrier equipped')
         return
     end
     
@@ -633,7 +616,7 @@ RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
         end
         
     if not stashInv then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Unable to access plate carrier storage')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Unable to access plate carrier storage')
         return
         end
     end
@@ -660,6 +643,7 @@ RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
     updatedMetadata.unequipped = nil 
     exports.ox_inventory:SetMetadata(source, slot, updatedMetadata)
     
+    local carrierConfig = ContainerConfigs[carrierType]
     playerArmorData[source] = {
         stashId = metadata.stashId,
         carrierType = carrierType,
@@ -667,7 +651,10 @@ RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
         virtualArmor = virtualArmor,
         plateCount = plateCount,
         lastPlateDurability = lastPlateDurability,
-        equippedAt = os.time()
+        equippedAt = os.time(),
+        vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
+            or (carrierType == 'lightpc' and 182)
+            or (carrierType == 'heavypc' and 183)
     }
     
     local targetArmor = 0
@@ -680,24 +667,24 @@ RegisterNetEvent('sjarmor:equipPlateCarrier', function(slot, carrierType)
     end
     
     local message = ('Plate carrier equipped with %d plates (%d virtual armor)'):format(plateCount, virtualArmor)
-    TriggerClientEvent('sjarmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
+    TriggerClientEvent('SJArmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
 end)
 
-RegisterNetEvent('sjarmor:equipPlateCarrierFromSlot', function(targetSlot, metadata, carrierType)
+RegisterNetEvent('SJArmor:equipPlateCarrierFromSlot', function(targetSlot, metadata, carrierType)
     local source = source
     
     if playerArmorData[source] then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'You already have a plate carrier equipped')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'You already have a plate carrier equipped')
         return
     end
     
     if targetSlot ~= Config.ArmorSlot then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Invalid armor slot')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Invalid armor slot')
         return
     end
     
     if not metadata or not metadata.stashId then
-        TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Plate carrier has no storage')
+        TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Plate carrier has no storage')
         return
     end
     
@@ -725,7 +712,7 @@ RegisterNetEvent('sjarmor:equipPlateCarrierFromSlot', function(targetSlot, metad
         end
         
         if not stashInv then
-            TriggerClientEvent('sjarmor:equipArmorResponse', source, false, nil, 'Unable to access plate carrier storage')
+            TriggerClientEvent('SJArmor:equipArmorResponse', source, false, nil, 'Unable to access plate carrier storage')
             return
         end
     end
@@ -756,6 +743,7 @@ RegisterNetEvent('sjarmor:equipPlateCarrierFromSlot', function(targetSlot, metad
         exports.ox_inventory:SetMetadata(source, targetSlot, updatedMetadata)
     end
     
+    local carrierConfig = ContainerConfigs[carrierType]
     playerArmorData[source] = {
         stashId = metadata.stashId,
         carrierType = carrierType,
@@ -763,7 +751,10 @@ RegisterNetEvent('sjarmor:equipPlateCarrierFromSlot', function(targetSlot, metad
         virtualArmor = virtualArmor,
         plateCount = plateCount,
         lastPlateDurability = lastPlateDurability,
-        equippedAt = os.time()
+        equippedAt = os.time(),
+        vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
+            or (carrierType == 'lightpc' and 182)
+            or (carrierType == 'heavypc' and 183)
     }
     
     local targetArmor = 0
@@ -776,14 +767,14 @@ RegisterNetEvent('sjarmor:equipPlateCarrierFromSlot', function(targetSlot, metad
     end
     
     local message = ('Plate carrier equipped with %d plates (%d virtual armor)'):format(plateCount, virtualArmor)
-    TriggerClientEvent('sjarmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
+    TriggerClientEvent('SJArmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
 end)
 
-RegisterNetEvent('sjarmor:unequipPlateCarrier', function()
+RegisterNetEvent('SJArmor:unequipPlateCarrier', function()
     local source = source
     
     if not playerArmorData[source] then
-        TriggerClientEvent('sjarmor:unequipArmorResponse', source, false, 'No plate carrier equipped')
+        TriggerClientEvent('SJArmor:unequipArmorResponse', source, false, 'No plate carrier equipped')
         return
     end
     
@@ -809,15 +800,15 @@ RegisterNetEvent('sjarmor:unequipPlateCarrier', function()
     
     playerArmorData[source] = nil
     
-    TriggerClientEvent('sjarmor:unequipArmorResponse', source, true, 'Plate carrier removed', 0)
+    TriggerClientEvent('SJArmor:unequipArmorResponse', source, true, 'Plate carrier removed', 0)
 end)
 
-RegisterNetEvent('sjarmor:cancelEquip', function(slot)
+RegisterNetEvent('SJArmor:cancelEquip', function(slot)
     local source = source
     playerArmorData[source] = nil
 end)
 
-RegisterNetEvent('sjarmor:cancelEquipAndMoveBack', function(targetSlot, metadata, carrierType)
+RegisterNetEvent('SJArmor:cancelEquipAndMoveBack', function(targetSlot, metadata, carrierType)
     local source = source
     playerArmorData[source] = nil
     
@@ -839,7 +830,7 @@ RegisterNetEvent('sjarmor:cancelEquipAndMoveBack', function(targetSlot, metadata
     end
 end)
 
-RegisterNetEvent('sjarmor:cancelUnequipAndMoveBack', function(originalSlot, metadata, carrierType)
+RegisterNetEvent('SJArmor:cancelUnequipAndMoveBack', function(originalSlot, metadata, carrierType)
     local source = source
     
     local playerInv = exports.ox_inventory:GetInventory(source)
@@ -858,7 +849,7 @@ RegisterNetEvent('sjarmor:cancelUnequipAndMoveBack', function(originalSlot, meta
     end
 end)
 
-RegisterNetEvent('sjarmor:armorDamaged', function(damageAmount)
+RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
     local source = source
     local armorData = playerArmorData[source]
     
@@ -936,10 +927,10 @@ RegisterNetEvent('sjarmor:armorDamaged', function(damageAmount)
     
     for _, plateBroken in ipairs(brokenPlates) do
         if newVirtualArmor <= 0 then
-            TriggerClientEvent('sjarmor:allPlatesBroken', source)
+            TriggerClientEvent('SJArmor:allPlatesBroken', source)
             break 
         else
-            TriggerClientEvent('sjarmor:plateBroken', source, plateBroken.label)
+            TriggerClientEvent('SJArmor:plateBroken', source, plateBroken.label)
         end
     end
     
@@ -955,7 +946,7 @@ RegisterNetEvent('sjarmor:armorDamaged', function(damageAmount)
     end
     
     
-    TriggerClientEvent('sjarmor:updateArmor', source, armorData, targetArmor)
+    TriggerClientEvent('SJArmor:updateArmor', source, armorData, targetArmor)
     
     updatePlateCarrierWeight(source, armorData.carrierSlot, armorData.stashId)
 end)
@@ -982,7 +973,6 @@ AddEventHandler('playerJoining', function()
                         if stashInv then
                             local virtualArmor, plateCount = calculateVirtualArmor(stashInv)
                             
-                            -- Only restore if equipped AND (in correct armor slot OR using button system)
                             local shouldRestore = item.metadata.equipped and (not Config.UseDragAndDrop or slot == Config.ArmorSlot)
                             
                             if shouldRestore then
@@ -996,6 +986,7 @@ AddEventHandler('playerJoining', function()
                                     end
                                 end
                                 
+                                local carrierConfig = ContainerConfigs[item.name]
                                 playerArmorData[source] = {
                                     stashId = item.metadata.stashId,
                                     carrierType = item.name,
@@ -1003,7 +994,10 @@ AddEventHandler('playerJoining', function()
                                     virtualArmor = virtualArmor,
                                     plateCount = plateCount,
                                     lastPlateDurability = lastPlateDurability,
-                                    equippedAt = os.time()
+                                    equippedAt = os.time(),
+                                    vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
+                                        or (item.name == 'lightpc' and 182)
+                                        or (item.name == 'heavypc' and 183)
                                 }
                                 
                                 local targetArmor = 0
@@ -1019,7 +1013,7 @@ AddEventHandler('playerJoining', function()
                                     and ('Welcome back! Plate carrier restored: %d plates (%d virtual armor)'):format(plateCount, virtualArmor)
                                     or 'Welcome back! Empty plate carrier restored - add plates to activate armor'
                                 
-                                TriggerClientEvent('sjarmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
+                                TriggerClientEvent('SJArmor:equipArmorResponse', source, true, playerArmorData[source], message, targetArmor)
                                 break
                             end
                         end
@@ -1055,7 +1049,6 @@ local function detectEquippedCarriers()
                         if stashInv then
                             local virtualArmor, plateCount = calculateVirtualArmor(stashInv)
                             
-                            -- Only restore if equipped AND (in correct armor slot OR using button system)
                             local shouldRestore = item.metadata.equipped and (not Config.UseDragAndDrop or slot == Config.ArmorSlot)
                             
                             if shouldRestore then
@@ -1076,7 +1069,10 @@ local function detectEquippedCarriers()
                                     virtualArmor = virtualArmor,
                                     plateCount = plateCount,
                                     lastPlateDurability = lastPlateDurability,
-                                    equippedAt = os.time()
+                                    equippedAt = os.time(),
+                                    vestDrawable = ((ContainerConfigs[item.name] and ContainerConfigs[item.name].vestDrawable)
+                                        or (item.name == 'lightpc' and 182)
+                                        or (item.name == 'heavypc' and 183))
                                 }
                                 
                                 local targetArmor = 0
@@ -1092,7 +1088,7 @@ local function detectEquippedCarriers()
                                     and ('Plate carrier restored! %d plates (%d virtual armor)'):format(plateCount, virtualArmor)
                                     or 'Empty plate carrier restored - add plates to activate armor'
                                 
-                                TriggerClientEvent('sjarmor:equipArmorResponse', playerIdNum, true, playerArmorData[playerIdNum], message, targetArmor)
+                                TriggerClientEvent('SJArmor:equipArmorResponse', playerIdNum, true, playerArmorData[playerIdNum], message, targetArmor)
                                 break
                             end
                         end
@@ -1129,7 +1125,7 @@ AddEventHandler('onResourceStart', function(resourceName)
                     else
                         playerArmorData[playerId] = nil
                         
-                        TriggerClientEvent('sjarmor:forceUnequip', playerId)
+                        TriggerClientEvent('SJArmor:forceUnequip', playerId)
                     end
                 end
             end
@@ -1147,7 +1143,7 @@ AddEventHandler('onResourceStop', function(resourceName)
     end
 end)
 
-RegisterNetEvent('sjarmor:openPlateCarrier', function(slot, carrierType)
+RegisterNetEvent('SJArmor:openPlateCarrier', function(slot, carrierType)
     local source = source
     local playerInv = exports.ox_inventory:GetInventory(source)
     
@@ -1253,7 +1249,7 @@ end)
 exports('setPlayerVirtualArmor', function(playerId, amount)
     if playerArmorData[playerId] then
         playerArmorData[playerId].virtualArmor = amount
-        TriggerClientEvent('sjarmor:updateArmor', playerId, playerArmorData[playerId])
+        TriggerClientEvent('SJArmor:updateArmor', playerId, playerArmorData[playerId])
         return true
     end
     return false
@@ -1287,7 +1283,7 @@ exports('RegisterPlateCarrierStash', function(stashId, carrierType, owner)
     return true
 end)
 
-lib.callback.register('sjarmor:checkStashExists', function(source, stashId)
+lib.callback.register('SJArmor:checkStashExists', function(source, stashId)
     
     local isRegistered = registeredStashes[stashId] ~= nil
     
