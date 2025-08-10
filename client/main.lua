@@ -5,6 +5,7 @@ local isServerUpdatingArmor = false
 local savedKevlarComponent = nil
 local isVestApplied = false
 
+-- Export function to open plate carrier stash
 function openPlateCarrier(slot, carrierType)
     lib.notify({
         type = 'inform',
@@ -18,13 +19,15 @@ function openPlateCarrier(slot, carrierType)
     end)
 end
 
+-- Export function to equip plate carrier (for button use)
 function equipPlateCarrier(slot, carrierType)
     local success = lib.progressCircle({
         label = Config.EquipSettings.progressText,
         duration = Config.EquipSettings.useTime,
+        position = 'bottom',
         canCancel = true,
         disable = {
-            move = true,
+            move = false,
             combat = true,
             mouse = false,
         },
@@ -44,13 +47,15 @@ function equipPlateCarrier(slot, carrierType)
     end
 end
 
+-- Export function to unequip plate carrier (for button use)
 function unequipPlateCarrier()
     local success = lib.progressCircle({
         label = Config.UnequipSettings.progressText,
         duration = Config.UnequipSettings.useTime,
+        position = 'bottom',
         canCancel = true,
         disable = {
-            move = true,
+            move = false,
             combat = true,
             mouse = false,
         },
@@ -65,10 +70,39 @@ function unequipPlateCarrier()
     end
 end
 
+-- Progress gate when using a plate (server awaits this) - CONFIG-DRIVEN
+lib.callback.register('SJArmor:plateInstallProgress', function(params)
+    params = params or {}
+
+    if params.closeInventory then
+        exports.ox_inventory:closeInventory()
+    end
+
+    local ok = lib.progressCircle({
+        label = params.label or 'Installing plate...',
+        duration = params.duration or 6000,
+        position = 'bottom',
+        canCancel = params.canCancel ~= false,
+        disable = params.disable or {
+             move = false, 
+            combat = true,
+            mouse = false 
+        },
+        anim = params.anim or {
+            dict = 'amb@prop_human_bum_bin@base', 
+            clip = 'base' 
+        },
+    })
+
+    return ok and true or false
+end)
+
+-- Register exports
 exports('openPlateCarrier', openPlateCarrier)
 exports('equipPlateCarrier', equipPlateCarrier)
 exports('unequipPlateCarrier', unequipPlateCarrier)
 
+-- Handle equipping plate carrier from server
 RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, message, targetArmor)
     if success then
         isUnequipping = false
@@ -125,7 +159,8 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
     end
 end)
 
-RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor, prevComponent)
+-- Handle unequipping plate carrier from server
+RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor)
     if success then
         isUnequipping = true
         
@@ -167,6 +202,7 @@ RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targ
     end
 end)
 
+-- Handle armor updates from server
 RegisterNetEvent('SJArmor:updateArmor', function(armorData, targetArmor)
     if armorData.virtualArmor > 0 then
         isUnequipping = false
@@ -192,6 +228,7 @@ RegisterNetEvent('SJArmor:updateArmor', function(armorData, targetArmor)
     end
 end)
 
+-- Handle plate breaking notification
 RegisterNetEvent('SJArmor:plateBroken', function(plateName)
     lib.notify({
         type = 'inform',
@@ -201,6 +238,7 @@ RegisterNetEvent('SJArmor:plateBroken', function(plateName)
     })
 end)
 
+-- Handle all plates broken notification
 RegisterNetEvent('SJArmor:allPlatesBroken', function()
     lib.notify({
         type = 'inform',
@@ -210,7 +248,8 @@ RegisterNetEvent('SJArmor:allPlatesBroken', function()
     })
 end)
 
-RegisterNetEvent('SJArmor:forceUnequip', function(prevComponent)
+-- Handle forced unequip
+RegisterNetEvent('SJArmor:forceUnequip', function()
     
     isUnequipping = true
     
@@ -294,13 +333,14 @@ function stopArmorMonitoring()
     end
 end
 
+-- Stop monitoring when resource stops
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName == GetCurrentResourceName() then
         stopArmorMonitoring()
     end
 end)
 
-
+-- Listen for armor slot changes
 RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
     if action == 'equipped' and item then
         local carrierType = nil
@@ -312,9 +352,10 @@ RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
             local success = lib.progressCircle({
                 label = Config.EquipSettings.progressText,
                 duration = Config.EquipSettings.useTime,
+                position = 'bottom',
                 canCancel = true,
                 disable = {
-                    move = true,
+                    move = false,
                     combat = true,
                     mouse = false,
                 },
@@ -334,9 +375,10 @@ RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
         local success = lib.progressCircle({
             label = Config.UnequipSettings.progressText,
             duration = Config.UnequipSettings.useTime,
+            position = 'bottom',
             canCancel = true,
             disable = {
-                move = true,
+                move = false,
                 combat = true,
                 mouse = false,
             },
@@ -352,6 +394,7 @@ RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
     end
 end)
 
+-- Handle starting equip progress for drag-to-slot
 RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, carrierType)
     
     exports.ox_inventory:closeInventory()
@@ -359,9 +402,10 @@ RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, ca
     local success = lib.progressCircle({
         label = Config.EquipSettings.progressText,
         duration = Config.EquipSettings.useTime,
+        position = 'bottom',
         canCancel = true,
         disable = {
-            move = true,
+            move = false,
             combat = true,
             mouse = false,
         },
@@ -386,6 +430,7 @@ RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, ca
     end
 end)
 
+-- Handle starting unequip progress for drag-away-from-slot
 RegisterNetEvent('SJArmor:startUnequipProgress', function(fromSlot, metadata, carrierType)
     
     exports.ox_inventory:closeInventory()
@@ -393,9 +438,10 @@ RegisterNetEvent('SJArmor:startUnequipProgress', function(fromSlot, metadata, ca
     local success = lib.progressCircle({
         label = Config.UnequipSettings.progressText,
         duration = Config.UnequipSettings.useTime,
+        position = 'bottom',
         canCancel = true,
         disable = {
-            move = true,
+            move = false,
             combat = true,
             mouse = false,
         },

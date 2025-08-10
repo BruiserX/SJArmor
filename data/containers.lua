@@ -25,23 +25,26 @@ return {
         -- Optional: if provided, will be used to apply the vest on equip
         vestDrawable = 182,
         whitelist = {
-            'steel_plate',
-            'uhmwpe_plate',
+            -- 'steel_plate',
+            -- 'uhmwpe_plate',
             'ceramic_plate', 
             'kevlar_plate'
         }
     },
     -- Example of how to add a new plate carrier:
-    -- ['mediumpc'] = {
-    --     label = 'Medium Plate Carrier',
-    --     plateSlots = 3,
-    --     baseWeight = 1500,
-    --     stashPrefix = 'mediumpc_',
-    --     whitelist = {
-    --         'steel_plate',
-    --         'uhmwpe_plate',
-    --         'ceramic_plate',
-    --         'kevlar_plate'
-    --     }
-    -- }
+    ['mediumpc'] = {
+        label = 'Medium Plate Carrier',
+        plateSlots = 3,
+        baseWeight = 1500,
+        stashPrefix = 'mediumpc_',
+        -- Drawable index for the Kevlar component (componentId 9)
+        -- Optional: if provided, will be used to apply the vest on equip
+        vestDrawable = 182,
+        whitelist = {
+            -- 'steel_plate',
+            'uhmwpe_plate',
+            'ceramic_plate',
+            'kevlar_plate'
+        }
+    }
 } 
