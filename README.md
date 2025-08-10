@@ -135,6 +135,8 @@ itemFilter = {
 }
 ```
 
+If adding a new plate type:
+
 **In the `swapItems` hook for plate restrictions:**
 ```lua
 allowedItems = {
