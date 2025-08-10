@@ -87,7 +87,12 @@ Config.PlateInstall = {
     },
 
     perPlate = {
-        steel_plate   = { duration = 9000 },
+        steel_plate   = { 
+            duration = 9000,
+            prop = { 
+            model = 'lb_tablet_prop' 
+        }
+        },
         ceramic_plate = { duration = 7500 },
         uhmwpe_plate  = { duration = 6000 },
         kevlar_plate  = { duration = 5000 },

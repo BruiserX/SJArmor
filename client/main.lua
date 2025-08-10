@@ -69,12 +69,48 @@ function unequipPlateCarrier()
     end
 end
 
--- Progress gate when using a plate (server awaits this) - CONFIG-DRIVEN
-lib.callback.register('SJArmor:plateInstallProgress', function(params)
+
+-- Progress gate when using a plate (server awaits this) - CONFIG-DRIVEN (with prop)
+lib.callback.register('sjarmor:plateInstallProgress', function(params)
     params = params or {}
 
     if params.closeInventory then
         exports.ox_inventory:closeInventory()
+    end
+
+    local ped = cache.ped or PlayerPedId()
+    local propHandle = nil
+
+    -- Spawn and attach prop if configured
+    local p = params.prop
+    if p and (p.enabled ~= false) and p.model then
+        local model = (type(p.model) == 'number') and p.model or joaat(p.model)
+        if not IsModelInCdimage(model) then
+            -- silently skip if model isn't valid/streamed
+        else
+            RequestModel(model)
+            local t = GetGameTimer() + 5000
+            while not HasModelLoaded(model) and GetGameTimer() < t do
+                Wait(10)
+            end
+
+            if HasModelLoaded(model) and DoesEntityExist(ped) then
+                local px, py, pz = table.unpack(GetEntityCoords(ped))
+                propHandle = CreateObject(model, px, py, pz, true, true, false)
+                SetEntityCollision(propHandle, false, false)
+                SetEntityCompletelyDisableCollision(propHandle, true, true)
+                SetEntityAsMissionEntity(propHandle, true, true)
+
+                local boneIndex = GetPedBoneIndex(ped, p.bone or 57005)
+                AttachEntityToEntity(
+                    propHandle, ped, boneIndex,
+                    (p.pos and p.pos.x) or 0.0, (p.pos and p.pos.y) or 0.0, (p.pos and p.pos.z) or 0.0,
+                    (p.rot and p.rot.x) or 0.0, (p.rot and p.rot.y) or 0.0, (p.rot and p.rot.z) or 0.0,
+                    true, true, false, true, 1, true
+                )
+                SetModelAsNoLongerNeeded(model)
+            end
+        end
     end
 
     local ok = lib.progressCircle({
@@ -82,19 +118,19 @@ lib.callback.register('SJArmor:plateInstallProgress', function(params)
         duration = params.duration or 6000,
         position = 'bottom',
         canCancel = params.canCancel ~= false,
-        disable = params.disable or {
-             move = false, 
-            combat = true,
-            mouse = false 
-        },
-        anim = params.anim or {
-            dict = 'amb@prop_human_bum_bin@base', 
-            clip = 'base' 
-        },
+        disable = params.disable or { move = false, combat = true, mouse = false },
+        anim = params.anim or { dict = 'clothingshirt', clip = 'try_shirt_negative_a' },
     })
+
+    -- Clean up prop
+    if propHandle and DoesEntityExist(propHandle) then
+        DeleteObject(propHandle)
+        propHandle = nil
+    end
 
     return ok and true or false
 end)
+
 
 -- Register exports
 exports('openPlateCarrier', openPlateCarrier)
