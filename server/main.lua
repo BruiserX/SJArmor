@@ -147,6 +147,12 @@ exports.ox_inventory:registerHook('createItem', function(payload)
         if not metadata.virtualArmor then metadata.virtualArmor = 0 end
         if not metadata.plateCount then metadata.plateCount = 0 end
         if not metadata.weight then metadata.weight = carrierConfig.baseWeight end
+        if not metadata.vestDrawable and carrierConfig and carrierConfig.vestDrawable then
+            metadata.vestDrawable = carrierConfig.vestDrawable
+        end
+        if metadata.vestDrawable and metadata.vestTexture == nil and carrierConfig and carrierConfig.vestTexture ~= nil then
+            metadata.vestTexture = carrierConfig.vestTexture
+        end
     end
     
     return metadata
@@ -287,8 +293,16 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                         end
                         
                         if not stillInPlayerInv then
+                            local prevComponent = nil
+                            if playerArmorData[source] and playerArmorData[source].prevVestDrawable ~= nil then
+                                prevComponent = {
+                                    drawable = playerArmorData[source].prevVestDrawable,
+                                    texture = playerArmorData[source].prevVestTexture or 0,
+                                    palette = playerArmorData[source].prevVestPalette or 0
+                                }
+                            end
                             playerArmorData[source] = nil
-                            TriggerClientEvent('SJArmor:forceUnequip', source)
+                            TriggerClientEvent('SJArmor:forceUnequip', source, prevComponent)
                             TriggerClientEvent('ox_lib:notify', source, {
                                 type = 'inform',
                                 icon = 'shield-halved',
@@ -308,8 +322,16 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 
                 SetTimeout(100, function()
                     if playerArmorData[source] and playerArmorData[source].stashId == item.metadata.stashId then
+                        local prevComponent = nil
+                        if playerArmorData[source] and playerArmorData[source].prevVestDrawable ~= nil then
+                            prevComponent = {
+                                drawable = playerArmorData[source].prevVestDrawable,
+                                texture = playerArmorData[source].prevVestTexture or 0,
+                                palette = playerArmorData[source].prevVestPalette or 0
+                            }
+                        end
                         playerArmorData[source] = nil
-                        TriggerClientEvent('SJArmor:forceUnequip', source)
+                        TriggerClientEvent('SJArmor:forceUnequip', source, prevComponent)
                         TriggerClientEvent('ox_lib:notify', source, {
                             type = 'inform',
                             icon = 'shield-halved',
@@ -559,7 +581,7 @@ function fixPlateCarrierStash(source, slot, carrierType)
     return false, nil
 end
 
-RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType)
+RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType, prevDrawable, prevTexture, prevPalette)
     local source = source
     local playerInv = exports.ox_inventory:GetInventory(source)
     
@@ -641,6 +663,11 @@ RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType)
     end
     updatedMetadata.equipped = true 
     updatedMetadata.unequipped = nil 
+    if prevDrawable ~= nil then
+        updatedMetadata.prevVestDrawable = prevDrawable
+        updatedMetadata.prevVestTexture = prevTexture or 0
+        updatedMetadata.prevVestPalette = prevPalette or 0
+    end
     exports.ox_inventory:SetMetadata(source, slot, updatedMetadata)
     
     local carrierConfig = ContainerConfigs[carrierType]
@@ -652,9 +679,13 @@ RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType)
         plateCount = plateCount,
         lastPlateDurability = lastPlateDurability,
         equippedAt = os.time(),
-        vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
-            or (carrierType == 'lightpc' and 182)
-            or (carrierType == 'heavypc' and 183)
+        vestDrawable = (carrierItem.metadata and carrierItem.metadata.vestDrawable)
+            or (carrierConfig and carrierConfig.vestDrawable),
+        vestTexture = (carrierItem.metadata and carrierItem.metadata.vestTexture)
+            or (carrierConfig and carrierConfig.vestTexture),
+        prevVestDrawable = prevDrawable,
+        prevVestTexture = prevTexture,
+        prevVestPalette = prevPalette
     }
     
     local targetArmor = 0
@@ -740,6 +771,11 @@ RegisterNetEvent('SJArmor:equipPlateCarrierFromSlot', function(targetSlot, metad
         end
         updatedMetadata.equipped = true 
         updatedMetadata.unequipped = nil 
+        if metadata and metadata.prevVestDrawable ~= nil then
+            updatedMetadata.prevVestDrawable = metadata.prevVestDrawable
+            updatedMetadata.prevVestTexture = metadata.prevVestTexture or 0
+            updatedMetadata.prevVestPalette = metadata.prevVestPalette or 0
+        end
         exports.ox_inventory:SetMetadata(source, targetSlot, updatedMetadata)
     end
     
@@ -752,9 +788,13 @@ RegisterNetEvent('SJArmor:equipPlateCarrierFromSlot', function(targetSlot, metad
         plateCount = plateCount,
         lastPlateDurability = lastPlateDurability,
         equippedAt = os.time(),
-        vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
-            or (carrierType == 'lightpc' and 182)
-            or (carrierType == 'heavypc' and 183)
+        vestDrawable = (metadata and metadata.vestDrawable)
+            or (carrierConfig and carrierConfig.vestDrawable),
+        vestTexture = (metadata and metadata.vestTexture)
+            or (carrierConfig and carrierConfig.vestTexture),
+        prevVestDrawable = metadata and metadata.prevVestDrawable,
+        prevVestTexture = metadata and metadata.prevVestTexture,
+        prevVestPalette = metadata and metadata.prevVestPalette
     }
     
     local targetArmor = 0
@@ -798,9 +838,17 @@ RegisterNetEvent('SJArmor:unequipPlateCarrier', function()
         exports.ox_inventory:SetMetadata(source, armorData.carrierSlot, metadata)
     end
     
+    local prevComponent = nil
+    if armorData.prevVestDrawable ~= nil then
+        prevComponent = {
+            drawable = armorData.prevVestDrawable,
+            texture = armorData.prevVestTexture or 0,
+            palette = armorData.prevVestPalette or 0
+        }
+    end
     playerArmorData[source] = nil
     
-    TriggerClientEvent('SJArmor:unequipArmorResponse', source, true, 'Plate carrier removed', 0)
+    TriggerClientEvent('SJArmor:unequipArmorResponse', source, true, 'Plate carrier removed', 0, prevComponent)
 end)
 
 RegisterNetEvent('SJArmor:cancelEquip', function(slot)
@@ -995,9 +1043,13 @@ AddEventHandler('playerJoining', function()
                                     plateCount = plateCount,
                                     lastPlateDurability = lastPlateDurability,
                                     equippedAt = os.time(),
-                                    vestDrawable = (carrierConfig and carrierConfig.vestDrawable)
-                                        or (item.name == 'lightpc' and 182)
-                                        or (item.name == 'heavypc' and 183)
+                                    vestDrawable = (item.metadata and item.metadata.vestDrawable)
+                                        or (carrierConfig and carrierConfig.vestDrawable),
+                                    vestTexture = (item.metadata and item.metadata.vestTexture)
+                                        or (carrierConfig and carrierConfig.vestTexture),
+                                    prevVestDrawable = item.metadata and item.metadata.prevVestDrawable,
+                                    prevVestTexture = item.metadata and item.metadata.prevVestTexture,
+                                    prevVestPalette = item.metadata and item.metadata.prevVestPalette
                                 }
                                 
                                 local targetArmor = 0
@@ -1070,9 +1122,13 @@ local function detectEquippedCarriers()
                                     plateCount = plateCount,
                                     lastPlateDurability = lastPlateDurability,
                                     equippedAt = os.time(),
-                                    vestDrawable = ((ContainerConfigs[item.name] and ContainerConfigs[item.name].vestDrawable)
-                                        or (item.name == 'lightpc' and 182)
-                                        or (item.name == 'heavypc' and 183))
+                                    vestDrawable = (item.metadata and item.metadata.vestDrawable)
+                                        or (ContainerConfigs[item.name] and ContainerConfigs[item.name].vestDrawable),
+                                    vestTexture = (item.metadata and item.metadata.vestTexture)
+                                        or (ContainerConfigs[item.name] and ContainerConfigs[item.name].vestTexture),
+                                    prevVestDrawable = item.metadata and item.metadata.prevVestDrawable,
+                                    prevVestTexture = item.metadata and item.metadata.prevVestTexture,
+                                    prevVestPalette = item.metadata and item.metadata.prevVestPalette
                                 }
                                 
                                 local targetArmor = 0

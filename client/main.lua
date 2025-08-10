@@ -35,7 +35,12 @@ function equipPlateCarrier(slot, carrierType)
     })
     
     if success then
-        TriggerServerEvent('SJArmor:equipPlateCarrier', slot, carrierType)
+        local ped = cache.ped or PlayerPedId()
+        local kevlarComponentId = 9
+        local prevDrawable = GetPedDrawableVariation(ped, kevlarComponentId)
+        local prevTexture  = GetPedTextureVariation(ped, kevlarComponentId)
+        local prevPalette  = GetPedPaletteVariation(ped, kevlarComponentId)
+        TriggerServerEvent('SJArmor:equipPlateCarrier', slot, carrierType, prevDrawable, prevTexture, prevPalette)
     end
 end
 
@@ -80,10 +85,8 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
         local ped = cache.ped or PlayerPedId()
         if DoesEntityExist(ped) then
             local kevlarComponentId = 9
-            local desiredDrawable = (armorData and armorData.vestDrawable)
-                or ((armorData and armorData.carrierType) == 'lightpc' and 182)
-                or ((armorData and armorData.carrierType) == 'heavypc' and 183)
-                or nil
+            local desiredDrawable = armorData and armorData.vestDrawable
+            local desiredTexture  = (armorData and armorData.vestTexture) or 0
             if desiredDrawable then
                 if not isVestApplied then
                     local currentDrawable = GetPedDrawableVariation(ped, kevlarComponentId)
@@ -95,7 +98,7 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
                         palette = currentPalette
                     }
                 end
-                SetPedComponentVariation(ped, kevlarComponentId, desiredDrawable, 0, 0)
+                SetPedComponentVariation(ped, kevlarComponentId, desiredDrawable, desiredTexture, 0)
                 isVestApplied = true
             end
         end
@@ -122,7 +125,7 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
     end
 end)
 
-RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor)
+RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor, prevComponent)
     if success then
         isUnequipping = true
         
@@ -135,8 +138,12 @@ RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targ
         SetPedArmour(cache.ped, targetArmor or 0)
 
         local ped = cache.ped or PlayerPedId()
-        if DoesEntityExist(ped) and isVestApplied and savedKevlarComponent then
-            SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+        if DoesEntityExist(ped) then
+            if prevComponent then
+                SetPedComponentVariation(ped, 9, prevComponent.drawable or 0, prevComponent.texture or 0, prevComponent.palette or 0)
+            elseif isVestApplied and savedKevlarComponent then
+                SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+            end
         end
         savedKevlarComponent = nil
         isVestApplied = false
@@ -203,7 +210,7 @@ RegisterNetEvent('SJArmor:allPlatesBroken', function()
     })
 end)
 
-RegisterNetEvent('SJArmor:forceUnequip', function()
+RegisterNetEvent('SJArmor:forceUnequip', function(prevComponent)
     
     isUnequipping = true
     
@@ -214,8 +221,12 @@ RegisterNetEvent('SJArmor:forceUnequip', function()
     SetPedArmour(cache.ped, 0)
 
     local ped = cache.ped or PlayerPedId()
-    if DoesEntityExist(ped) and isVestApplied and savedKevlarComponent then
-        SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+    if DoesEntityExist(ped) then
+        if isVestApplied and savedKevlarComponent then
+            SetPedComponentVariation(ped, 9, savedKevlarComponent.drawable or 0, savedKevlarComponent.texture or 0, savedKevlarComponent.palette or 0)
+        elseif prevComponent then
+            SetPedComponentVariation(ped, 9, prevComponent.drawable or 0, prevComponent.texture or 0, prevComponent.palette or 0)
+        end
     end
     savedKevlarComponent = nil
     isVestApplied = false
@@ -361,6 +372,14 @@ RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, ca
     })
     
     if success then
+        local ped = cache.ped or PlayerPedId()
+        if DoesEntityExist(ped) then
+            local kevlarComponentId = 9
+            metadata = metadata or {}
+            metadata.prevVestDrawable = GetPedDrawableVariation(ped, kevlarComponentId)
+            metadata.prevVestTexture  = GetPedTextureVariation(ped, kevlarComponentId)
+            metadata.prevVestPalette  = GetPedPaletteVariation(ped, kevlarComponentId)
+        end
         TriggerServerEvent('SJArmor:equipPlateCarrierFromSlot', targetSlot, metadata, carrierType)
     else
         TriggerServerEvent('SJArmor:cancelEquipAndMoveBack', targetSlot, metadata, carrierType)

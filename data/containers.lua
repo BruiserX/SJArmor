@@ -6,8 +6,9 @@ return {
         baseWeight = 2000, -- 2kg base weight
         stashPrefix = 'heavypc_',
         -- Drawable index for the Kevlar component (componentId 9)
-        -- Defaults to 183 if omitted
-        vestDrawable = 183,
+        -- Optional: if provided, will be used to apply the vest on equip
+        vestDrawable = 15,
+        vestTexture = 2,
         whitelist = {
             'steel_plate',
             'uhmwpe_plate', 
@@ -21,7 +22,7 @@ return {
         baseWeight = 1000, -- 1kg base weight
         stashPrefix = 'lightpc_',
         -- Drawable index for the Kevlar component (componentId 9)
-        -- Defaults to 182 if omitted
+        -- Optional: if provided, will be used to apply the vest on equip
         vestDrawable = 182,
         whitelist = {
             'steel_plate',
