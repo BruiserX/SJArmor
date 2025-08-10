@@ -1562,25 +1562,12 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
     updatePlateCarrierWeight(src, armorData.carrierSlot, armorData.stashId)
 
     -- feedback
-    lib.notify(src, {
-        type = 'success',
-        description = ('Installed %s. Plates: %d/%d.'):format(item.label, newPlateCount, carrierCfg.plateSlots or 0)
-    })
-
+    TriggerClientEvent('ox_lib:notify', source, {
+            type = 'success',
+            description = ('Installed %s. Plates: %d/%d.'):format(item.label, newPlateCount, carrierCfg.plateSlots or 0)
+        })
     finish()
 end)
-
--- exports('useArmorPlate', function(event, item, inventory, slot, data)
---     local source = inventory.id
---     lib.notify(source, {
---         type = 'inform',
---         description = ('Armor plate: %s (Durability: %d/%d)'):format(
---             item.label,
---             item.metadata.durability or Config.Plates[item.name].durability,
---             Config.Plates[item.name].durability
---         )
---     })
--- end)
 
 exports('usePlateCarrier', function(event, item, inventory, slot, data)
     local source = inventory.id
@@ -1589,13 +1576,12 @@ exports('usePlateCarrier', function(event, item, inventory, slot, data)
     if metadata.stashId then
         local stashInv = exports.ox_inventory:GetInventory(metadata.stashId, false)
         local virtualArmor, plateCount = calculateVirtualArmor(stashInv)
-        
-        lib.notify(source, {
+        TriggerClientEvent('ox_lib:notify', source, {
             type = 'inform',
             description = ('Plate carrier: %d plates, %d virtual armor'):format(plateCount, virtualArmor)
         })
     else
-        lib.notify(source, {
+        TriggerClientEvent('ox_lib:notify', source, {
             type = 'error',
             description = 'Plate carrier has no storage assigned'
         })

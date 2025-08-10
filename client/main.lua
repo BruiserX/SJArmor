@@ -7,11 +7,10 @@ local isVestApplied = false
 
 -- Export function to open plate carrier stash
 function openPlateCarrier(slot, carrierType)
-    lib.notify({
+    TriggerClientEvent('ox_lib:notify', source, {
         type = 'inform',
         description = 'Opening plate carrier...'
-    })
-    
+        })
     exports.ox_inventory:closeInventory()
     
     SetTimeout(100, function()
@@ -146,15 +145,14 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
         else
             stopArmorMonitoring()
         end
-        
-        lib.notify({
-            type = 'success',
-            description = message or ('Plate carrier equipped! Virtual armor: %d'):format(newVirtualArmor)
+        TriggerClientEvent('ox_lib:notify', source, {
+        type = 'success',
+        description = message or ('Plate carrier equipped! Virtual armor: %d'):format(newVirtualArmor)
         })
     else
-        lib.notify({
-            type = 'error',
-            description = message or 'Failed to equip plate carrier'
+        TriggerClientEvent('ox_lib:notify', source, {
+        type = 'error',
+        description = message or 'Failed to equip plate carrier'
         })
     end
 end)
@@ -189,13 +187,12 @@ RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targ
         SetTimeout(1000, function()
             isServerUpdatingArmor = false
         end)
-        
-        lib.notify({
+        TriggerClientEvent('ox_lib:notify', source, {
             type = 'success',
             description = message or 'Plate carrier removed'
         })
     else
-        lib.notify({
+        TriggerClientEvent('ox_lib:notify', source, {
             type = 'error',
             description = message or 'Failed to remove plate carrier'
         })
@@ -230,7 +227,7 @@ end)
 
 -- Handle plate breaking notification
 RegisterNetEvent('SJArmor:plateBroken', function(plateName)
-    lib.notify({
+    TriggerClientEvent('ox_lib:notify', source, {
         type = 'inform',
         icon = 'shield-crack',
         iconColor = 'orange',
@@ -240,7 +237,7 @@ end)
 
 -- Handle all plates broken notification
 RegisterNetEvent('SJArmor:allPlatesBroken', function()
-    lib.notify({
+    TriggerClientEvent('ox_lib:notify', source, {
         type = 'inform',
         icon = 'shield-halved',
         iconColor = 'red',
@@ -273,13 +270,14 @@ RegisterNetEvent('SJArmor:forceUnequip', function()
     SetTimeout(100, function()
         isUnequipping = false
     end)
-    
-    lib.notify({
+
+    TriggerClientEvent('ox_lib:notify', source, {
         type = 'inform',
         icon = 'shield-halved',
         iconColor = 'orange',
         description = 'Plate carrier was removed improperly - armor disabled.'
     })
+    
 end)
 
 function startArmorMonitoring()
