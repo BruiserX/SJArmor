@@ -7,12 +7,12 @@ local isVestApplied = false
 
 -- Export function to open plate carrier stash
 function openPlateCarrier(slot, carrierType)
-    TriggerClientEvent('ox_lib:notify', source, {
+    lib.notify({
         type = 'inform',
         description = 'Opening plate carrier...'
-        })
+    })
     exports.ox_inventory:closeInventory()
-    
+
     SetTimeout(100, function()
         TriggerServerEvent('SJArmor:openPlateCarrier', slot, carrierType)
     end)
@@ -25,17 +25,10 @@ function equipPlateCarrier(slot, carrierType)
         duration = Config.EquipSettings.useTime,
         position = 'bottom',
         canCancel = true,
-        disable = {
-            move = false,
-            combat = true,
-            mouse = false,
-        },
-        anim = {
-            dict = Config.EquipSettings.animation.dict,
-            clip = Config.EquipSettings.animation.clip,
-        },
+        disable = { move = false, combat = true, mouse = false },
+        anim = { dict = Config.EquipSettings.animation.dict, clip = Config.EquipSettings.animation.clip },
     })
-    
+
     if success then
         local ped = cache.ped or PlayerPedId()
         local kevlarComponentId = 9
@@ -53,65 +46,63 @@ function unequipPlateCarrier()
         duration = Config.UnequipSettings.useTime,
         position = 'bottom',
         canCancel = true,
-        disable = {
-            move = false,
-            combat = true,
-            mouse = false,
-        },
-        anim = {
-            dict = Config.UnequipSettings.animation.dict,
-            clip = Config.UnequipSettings.animation.clip,
-        },
+        disable = { move = false, combat = true, mouse = false },
+        anim = { dict = Config.UnequipSettings.animation.dict, clip = Config.UnequipSettings.animation.clip },
     })
-    
+
     if success then
         TriggerServerEvent('SJArmor:unequipPlateCarrier')
     end
 end
 
-
 -- Progress gate when using a plate (server awaits this) - CONFIG-DRIVEN (with prop)
-lib.callback.register('sjarmor:plateInstallProgress', function(params)
+lib.callback.register('SJArmor:plateInstallProgress', function(params)
     params = params or {}
+    if params.closeInventory then exports.ox_inventory:closeInventory() end
 
-    if params.closeInventory then
-        exports.ox_inventory:closeInventory()
-    end
+        local ped = cache.ped or PlayerPedId()
+        local propHandle = nil
+        local p = params.prop
 
-    local ped = cache.ped or PlayerPedId()
-    local propHandle = nil
+        if p and (p.enabled ~= false) and p.model then
+            local model = (type(p.model) == 'number') and p.model or joaat(p.model)
 
-    -- Spawn and attach prop if configured
-    local p = params.prop
-    if p and (p.enabled ~= false) and p.model then
-        local model = (type(p.model) == 'number') and p.model or joaat(p.model)
-        if not IsModelInCdimage(model) then
-            -- silently skip if model isn't valid/streamed
-        else
-            RequestModel(model)
-            local t = GetGameTimer() + 5000
-            while not HasModelLoaded(model) and GetGameTimer() < t do
-                Wait(10)
-            end
+            -- ✅ Use IsModelValid for streamed models
+            if not IsModelValid(model) then
+                print(('[SJArmor] Invalid model (not valid): %s'):format(tostring(p.model)))
+            else
+                RequestModel(model)
+                local t = GetGameTimer() + 10000
+                while not HasModelLoaded(model) and GetGameTimer() < t do Wait(0) end
 
-            if HasModelLoaded(model) and DoesEntityExist(ped) then
-                local px, py, pz = table.unpack(GetEntityCoords(ped))
-                propHandle = CreateObject(model, px, py, pz, true, true, false)
-                SetEntityCollision(propHandle, false, false)
-                SetEntityCompletelyDisableCollision(propHandle, true, true)
-                SetEntityAsMissionEntity(propHandle, true, true)
+                if not HasModelLoaded(model) then
+                    print(('[SJArmor] Timed out loading model: %s'):format(tostring(p.model)))
+                elseif DoesEntityExist(ped) then
+                    local x, y, z = table.unpack(GetEntityCoords(ped))
+                    propHandle = CreateObject(model, x, y, z, true, true, false)
+                    if not propHandle or not DoesEntityExist(propHandle) then
+                        print('[SJArmor] CreateObject failed for armor plate')
+                    else
+                        SetEntityCollision(propHandle, false, false)
+                        if SetEntityCompletelyDisableCollision then
+                            SetEntityCompletelyDisableCollision(propHandle, true, true)
+                        end
+                        FreezeEntityPosition(propHandle, true)
+                        SetEntityAsMissionEntity(propHandle, true, true)
 
-                local boneIndex = GetPedBoneIndex(ped, p.bone or 57005)
-                AttachEntityToEntity(
-                    propHandle, ped, boneIndex,
-                    (p.pos and p.pos.x) or 0.0, (p.pos and p.pos.y) or 0.0, (p.pos and p.pos.z) or 0.0,
-                    (p.rot and p.rot.x) or 0.0, (p.rot and p.rot.y) or 0.0, (p.rot and p.rot.z) or 0.0,
-                    true, true, false, true, 1, true
-                )
+                        local boneIndex = GetPedBoneIndex(ped, p.bone or 57005)
+                        AttachEntityToEntity(
+                            propHandle, ped, boneIndex,
+                            (p.pos and p.pos.x) or 0.0, (p.pos and p.pos.y) or 0.0, (p.pos and p.pos.z) or 0.0,
+                            (p.rot and p.rot.x) or 0.0, (p.rot and p.rot.y) or 0.0, (p.rot and p.rot.z) or 0.0,
+                            true, true, false, true, 1, true
+                        )
+                    end
+                end
+
                 SetModelAsNoLongerNeeded(model)
             end
         end
-    end
 
     local ok = lib.progressCircle({
         label = params.label or 'Installing plate...',
@@ -122,7 +113,6 @@ lib.callback.register('sjarmor:plateInstallProgress', function(params)
         anim = params.anim or { dict = 'clothingshirt', clip = 'try_shirt_negative_a' },
     })
 
-    -- Clean up prop
     if propHandle and DoesEntityExist(propHandle) then
         DeleteObject(propHandle)
         propHandle = nil
@@ -130,7 +120,6 @@ lib.callback.register('sjarmor:plateInstallProgress', function(params)
 
     return ok and true or false
 end)
-
 
 -- Register exports
 exports('openPlateCarrier', openPlateCarrier)
@@ -141,13 +130,11 @@ exports('unequipPlateCarrier', unequipPlateCarrier)
 RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, message, targetArmor)
     if success then
         isUnequipping = false
-        
+
         local newVirtualArmor = armorData.virtualArmor
-        
         currentArmorData = armorData
-        
         isServerUpdatingArmor = true
-        
+
         SetPlayerMaxArmour(cache.serverId, 100)
         SetPedArmour(cache.ped, targetArmor or 0)
 
@@ -159,50 +146,48 @@ RegisterNetEvent('SJArmor:equipArmorResponse', function(success, armorData, mess
             if desiredDrawable then
                 if not isVestApplied then
                     local currentDrawable = GetPedDrawableVariation(ped, kevlarComponentId)
-                    local currentTexture = GetPedTextureVariation(ped, kevlarComponentId)
-                    local currentPalette = GetPedPaletteVariation(ped, kevlarComponentId)
+                    local currentTexture  = GetPedTextureVariation(ped, kevlarComponentId)
+                    local currentPalette  = GetPedPaletteVariation(ped, kevlarComponentId)
                     savedKevlarComponent = {
                         drawable = currentDrawable,
-                        texture = currentTexture,
-                        palette = currentPalette
+                        texture  = currentTexture,
+                        palette  = currentPalette
                     }
                 end
                 SetPedComponentVariation(ped, kevlarComponentId, desiredDrawable, desiredTexture, 0)
                 isVestApplied = true
             end
         end
-        
-        SetTimeout(1000, function()
-            isServerUpdatingArmor = false
-        end)
-        
+
+        SetTimeout(1000, function() isServerUpdatingArmor = false end)
+
         if newVirtualArmor > 0 then
             startArmorMonitoring()
         else
             stopArmorMonitoring()
         end
-        TriggerClientEvent('ox_lib:notify', source, {
-        type = 'success',
-        description = message or ('Plate carrier equipped! Virtual armor: %d'):format(newVirtualArmor)
+
+        lib.notify({
+            type = 'success',
+            description = message or ('Plate carrier equipped! Virtual armor: %d'):format(newVirtualArmor)
         })
     else
-        TriggerClientEvent('ox_lib:notify', source, {
-        type = 'error',
-        description = message or 'Failed to equip plate carrier'
+        lib.notify({
+            type = 'error',
+            description = message or 'Failed to equip plate carrier'
         })
     end
 end)
 
 -- Handle unequipping plate carrier from server
-RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor)
+RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targetArmor, prevComponent)
     if success then
         isUnequipping = true
-        
         isServerUpdatingArmor = true
-        
+
         currentArmorData = {}
         stopArmorMonitoring()
-        
+
         SetPlayerMaxArmour(cache.serverId, 100)
         SetPedArmour(cache.ped, targetArmor or 0)
 
@@ -216,19 +201,16 @@ RegisterNetEvent('SJArmor:unequipArmorResponse', function(success, message, targ
         end
         savedKevlarComponent = nil
         isVestApplied = false
-        
-        SetTimeout(100, function()
-            isUnequipping = false
-        end)
-        SetTimeout(1000, function()
-            isServerUpdatingArmor = false
-        end)
-        TriggerClientEvent('ox_lib:notify', source, {
+
+        SetTimeout(100, function() isUnequipping = false end)
+        SetTimeout(1000, function() isServerUpdatingArmor = false end)
+
+        lib.notify({
             type = 'success',
             description = message or 'Plate carrier removed'
         })
     else
-        TriggerClientEvent('ox_lib:notify', source, {
+        lib.notify({
             type = 'error',
             description = message or 'Failed to remove plate carrier'
         })
@@ -242,16 +224,13 @@ RegisterNetEvent('SJArmor:updateArmor', function(armorData, targetArmor)
     end
 
     isServerUpdatingArmor = true
-    
     currentArmorData = armorData
-    
+
     SetPlayerMaxArmour(cache.serverId, 100)
     SetPedArmour(cache.ped, targetArmor or 0)
-    
-    SetTimeout(1000, function()
-        isServerUpdatingArmor = false
-    end)
-    
+
+    SetTimeout(1000, function() isServerUpdatingArmor = false end)
+
     if armorData.virtualArmor > 0 then
         if not isArmorMonitoringActive then
             startArmorMonitoring()
@@ -263,7 +242,7 @@ end)
 
 -- Handle plate breaking notification
 RegisterNetEvent('SJArmor:plateBroken', function(plateName)
-    TriggerClientEvent('ox_lib:notify', source, {
+    lib.notify({
         type = 'inform',
         icon = 'shield-crack',
         iconColor = 'orange',
@@ -273,7 +252,7 @@ end)
 
 -- Handle all plates broken notification
 RegisterNetEvent('SJArmor:allPlatesBroken', function()
-    TriggerClientEvent('ox_lib:notify', source, {
+    lib.notify({
         type = 'inform',
         icon = 'shield-halved',
         iconColor = 'red',
@@ -282,13 +261,12 @@ RegisterNetEvent('SJArmor:allPlatesBroken', function()
 end)
 
 -- Handle forced unequip
-RegisterNetEvent('SJArmor:forceUnequip', function()
-    
+RegisterNetEvent('SJArmor:forceUnequip', function(prevComponent)
     isUnequipping = true
-    
+
     currentArmorData = {}
     stopArmorMonitoring()
-    
+
     SetPlayerMaxArmour(cache.serverId, 100)
     SetPedArmour(cache.ped, 0)
 
@@ -302,61 +280,48 @@ RegisterNetEvent('SJArmor:forceUnequip', function()
     end
     savedKevlarComponent = nil
     isVestApplied = false
-    
-    SetTimeout(100, function()
-        isUnequipping = false
-    end)
 
-    TriggerClientEvent('ox_lib:notify', source, {
+    SetTimeout(100, function() isUnequipping = false end)
+
+    lib.notify({
         type = 'inform',
         icon = 'shield-halved',
         iconColor = 'orange',
         description = 'Plate carrier was removed improperly - armor disabled.'
     })
-    
 end)
 
 function startArmorMonitoring()
-    if isArmorMonitoringActive then 
-        return 
-    end
-    
+    if isArmorMonitoringActive then return end
     isArmorMonitoringActive = true
-    
+
     CreateThread(function()
         local lastCheckedArmor = GetPedArmour(cache.ped)
         local lastDamageTime = 0
-        
+
         while isArmorMonitoringActive do
             Wait(300)
-            
+
             local currentGtaArmor = GetPedArmour(cache.ped)
             local currentTime = GetGameTimer()
-            
+
             if currentGtaArmor < lastCheckedArmor and (currentTime - lastDamageTime) > 500 and not isServerUpdatingArmor then
                 local damageAmount = lastCheckedArmor - currentGtaArmor
-                
-
                 if damageAmount >= math.max(Config.DamageSettings.minimumDamageThreshold, 5) then
                     TriggerServerEvent('SJArmor:armorDamaged', damageAmount)
                     lastDamageTime = currentTime
-                else
                 end
             elseif isServerUpdatingArmor then
-                if currentGtaArmor ~= lastCheckedArmor then
-                end
                 lastCheckedArmor = currentGtaArmor
-            elseif currentGtaArmor < lastCheckedArmor and (currentTime - lastDamageTime) <= 500 then   
             end
-            
+
             lastCheckedArmor = currentGtaArmor
-            
+
             if not currentArmorData.virtualArmor or currentArmorData.virtualArmor <= 0 then
                 isArmorMonitoringActive = false
                 break
             end
         end
-        
     end)
 end
 
@@ -377,51 +342,34 @@ end)
 -- Listen for armor slot changes
 RegisterNetEvent('ox_inventory:armorSlotChanged', function(item, action)
     if action == 'equipped' and item then
-        local carrierType = nil
-        if item.name then
-            carrierType = item.name
-        end
-        
+        local carrierType = item.name
         if carrierType then
             local success = lib.progressCircle({
                 label = Config.EquipSettings.progressText,
                 duration = Config.EquipSettings.useTime,
                 position = 'bottom',
                 canCancel = true,
-                disable = {
-                    move = false,
-                    combat = true,
-                    mouse = false,
-                },
-                anim = {
-                    dict = Config.EquipSettings.animation.dict,
-                    clip = Config.EquipSettings.animation.clip,
-                },
+                disable = { move = false, combat = true, mouse = false },
+                anim = { dict = Config.EquipSettings.animation.dict, clip = Config.EquipSettings.animation.clip },
             })
-            
+
             if success then
                 TriggerServerEvent('SJArmor:equipPlateCarrierFromSlot', item.slot, item.metadata, carrierType)
             else
                 TriggerServerEvent('SJArmor:cancelEquip', item.slot)
             end
         end
+
     elseif action == 'unequipped' then
         local success = lib.progressCircle({
             label = Config.UnequipSettings.progressText,
             duration = Config.UnequipSettings.useTime,
             position = 'bottom',
             canCancel = true,
-            disable = {
-                move = false,
-                combat = true,
-                mouse = false,
-            },
-            anim = {
-                dict = Config.UnequipSettings.animation.dict,
-                clip = Config.UnequipSettings.animation.clip,
-            },
+            disable = { move = false, combat = true, mouse = false },
+            anim = { dict = Config.UnequipSettings.animation.dict, clip = Config.UnequipSettings.animation.clip },
         })
-        
+
         if success then
             TriggerServerEvent('SJArmor:unequipPlateCarrier')
         end
@@ -430,25 +378,17 @@ end)
 
 -- Handle starting equip progress for drag-to-slot
 RegisterNetEvent('SJArmor:startEquipProgress', function(targetSlot, metadata, carrierType)
-    
     exports.ox_inventory:closeInventory()
-    
+
     local success = lib.progressCircle({
         label = Config.EquipSettings.progressText,
         duration = Config.EquipSettings.useTime,
         position = 'bottom',
         canCancel = true,
-        disable = {
-            move = false,
-            combat = true,
-            mouse = false,
-        },
-        anim = {
-            dict = Config.EquipSettings.animation.dict,
-            clip = Config.EquipSettings.animation.clip,
-        },
+        disable = { move = false, combat = true, mouse = false },
+        anim = { dict = Config.EquipSettings.animation.dict, clip = Config.EquipSettings.animation.clip },
     })
-    
+
     if success then
         local ped = cache.ped or PlayerPedId()
         if DoesEntityExist(ped) then
@@ -466,29 +406,48 @@ end)
 
 -- Handle starting unequip progress for drag-away-from-slot
 RegisterNetEvent('SJArmor:startUnequipProgress', function(fromSlot, metadata, carrierType)
-    
     exports.ox_inventory:closeInventory()
-    
+
     local success = lib.progressCircle({
         label = Config.UnequipSettings.progressText,
         duration = Config.UnequipSettings.useTime,
         position = 'bottom',
         canCancel = true,
-        disable = {
-            move = false,
-            combat = true,
-            mouse = false,
-        },
-        anim = {
-            dict = Config.UnequipSettings.animation.dict,
-            clip = Config.UnequipSettings.animation.clip,
-        },
+        disable = { move = false, combat = true, mouse = false },
+        anim = { dict = Config.UnequipSettings.animation.dict, clip = Config.UnequipSettings.animation.clip },
     })
-    
+
     if success then
         TriggerServerEvent('SJArmor:unequipPlateCarrier')
     else
-        
         TriggerServerEvent('SJArmor:cancelUnequipAndMoveBack', fromSlot, metadata, carrierType)
     end
-end) 
+end)
+
+RegisterCommand('platecheck', function()
+    local name = 'subj3ct_armorplate'
+    local mdl  = joaat(name)
+
+    print(('[platecheck] %s inCd=%s valid=%s'):
+        format(name, tostring(IsModelInCdimage(mdl)), tostring(IsModelValid(mdl))))
+
+    RequestModel(mdl)
+    local deadline = GetGameTimer() + 10000
+    while not HasModelLoaded(mdl) do
+        if GetGameTimer() > deadline then
+            print('[platecheck] timeout waiting for model')
+            return
+        end
+        Wait(0)
+    end
+    print('[platecheck] loaded=true')
+
+    local ped = PlayerPedId()
+    local pos = GetEntityCoords(ped)
+    local obj = CreateObjectNoOffset(mdl, pos.x, pos.y, pos.z + 0.5, true, false, false)
+    SetEntityAsMissionEntity(obj, true, true)
+    PlaceObjectOnGroundProperly(obj)
+    SetModelAsNoLongerNeeded(mdl)
+end)
+
+

@@ -20,7 +20,10 @@ server_scripts {
 }
 
 files {
-    'data/containers.lua'
+    'data/containers.lua',
+    'stream/*.ydr',
+    'stream/*.ytyp'
+
 }
 
 dependencies {
@@ -30,3 +33,5 @@ dependencies {
 
 lua54 'yes'
 use_experimental_fxv2_oal 'yes' 
+
+data_file 'DLC_ITYP_REQUEST' 'stream/subj3ct_armorplate_arch.ytyp'

@@ -72,29 +72,27 @@ Config.DamageSettings = {
 
 Config.PlateInstall = {
     enabled = true,
-    label = 'Installing plate...', -- used if no per-plate override
+    label = 'Installing plate...',
     duration = 6000,
     canCancel = true,
     closeInventory = true,
-    disable = {
-         move = false,
-        combat = true, 
-        mouse = false 
-    },
-    anim = { 
-        dict = 'clothingshirt', 
-        clip = 'try_shirt_negative_a' 
+    disable = { move = false, combat = true, mouse = false },
+    anim = { dict = 'gestures@m@car@van@casual@ds', clip = 'gesture_me_hard' },
+
+    -- DEFAULT prop setup (used for every plate unless overridden below)
+    prop = {
+        enabled = true,
+        model = 'subj3ct_armorplate',      -- swap later to your plate prop if you get one
+        bone  = 57005,                 -- your bone id
+        pos   = { x = 0.15304574388404, y = -0.025746823922242, z = -0.0071596079540768 },
+        rot   = {  x = 45.0, y = 90.0, z = -180.0 },
     },
 
     perPlate = {
-        steel_plate   = { 
-            duration = 9000,
-            prop = { 
-            model = 'lb_tablet_prop' 
-        }
-        },
+        -- inherits the default prop unless you override it here
+        steel_plate   = { duration = 9000 },
         ceramic_plate = { duration = 7500 },
         uhmwpe_plate  = { duration = 6000 },
         kevlar_plate  = { duration = 5000 },
     }
-} 
+}

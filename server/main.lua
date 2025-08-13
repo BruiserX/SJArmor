@@ -41,7 +41,18 @@ local function calculateVirtualArmor(stashInventory)
     for slot, item in pairs(stashInventory.items) do
         if item and Config.Plates[item.name] then
             local plateConfig = Config.Plates[item.name]
-            local durability = item.metadata.durability or 100
+            -- Use actual durability from metadata, only default to 100 if metadata is completely missing
+            local durability = 100
+            -- Check custom durability field first, then fallback to standard durability
+            if item.metadata and item.metadata.plateDurability ~= nil then
+                durability = item.metadata.plateDurability
+            elseif item.metadata and item.metadata.durability ~= nil then
+                durability = item.metadata.durability
+            end
+            
+            -- Debug: Log durability values for each plate
+            print(string.format("[SJArmor] calculateVirtualArmor: plate=%s, durability=%s", 
+                item.name, tostring(durability)))
             
             if durability > 0 then
                 totalArmor = totalArmor + plateConfig.protection
@@ -109,7 +120,14 @@ local function getNextPlateToBreak(stashInventory)
     for slot, item in pairs(stashInventory.items) do
         if item and Config.Plates[item.name] then
             local plateConfig = Config.Plates[item.name]
-            local durability = item.metadata.durability or plateConfig.durability
+            -- Use actual durability from metadata, fallback to config default only if metadata is missing
+            local durability = plateConfig.durability or 100
+            -- Check custom durability field first, then fallback to standard durability
+            if item.metadata and item.metadata.plateDurability ~= nil then
+                durability = item.metadata.plateDurability
+            elseif item.metadata and item.metadata.durability ~= nil then
+                durability = item.metadata.durability
+            end
             
             if durability > 0 and plateConfig.tier < bestTier then
                 bestTier = plateConfig.tier
@@ -125,40 +143,44 @@ local function getNextPlateToBreak(stashInventory)
     return bestPlate
 end
 
--- local function createPlateCarrierStash(playerId, carrierType, itemSlot)
---     local identifier = exports.ox_inventory:GetInventory(playerId).owner
---     local timestamp = os.time()
---     local stashId = ('%s_%s_%d_%d'):format(ContainerConfigs[carrierType].stashPrefix, identifier, itemSlot, timestamp)
-    
---     -- Register the stash in ox_inventory
---     local carrierConfig = ContainerConfigs[carrierType]
---     exports.ox_inventory:RegisterStash(stashId, carrierConfig.label, carrierConfig.plateSlots, 50000, identifier, {})
-    
---     registeredStashes[stashId] = {
---         owner = identifier,
---         type = carrierType,
---         created = timestamp
---     }
-    
---     return stashId
--- end
-
 -- Hook to initialize item metadata when created (plates + plate carriers)
 exports.ox_inventory:registerHook('createItem', function(payload)
     local item = payload.item
     local metadata = payload.metadata or {}
     
+    -- Debug: Log the full payload to understand what's happening
+    print(string.format("[SJArmor] createItem hook DEBUG: Full payload for %s: %s", item.name, json.encode(payload)))
+    
     -- Handle plate durability initialization
     if Config.Plates[item.name] then
         local plateConfig = Config.Plates[item.name]
         
-        if not metadata.durability then
+        -- Debug: Log what we received
+        print(string.format("[SJArmor] createItem hook DEBUG: Received metadata for %s: durability=%s, plateDurability=%s", 
+            item.name, tostring(metadata.durability), tostring(metadata.plateDurability)))
+        
+        -- Check if this item has our custom durability field (meaning it's an existing item being moved)
+        if metadata.plateDurability ~= nil then
+            -- This is an existing item with our custom durability field - preserve it
+            metadata.durability = metadata.plateDurability  -- Set standard durability to match our custom field
+            print(string.format("[SJArmor] createItem hook: Preserving existing plateDurability=%s for plate %s", 
+                tostring(metadata.plateDurability), item.name))
+        elseif metadata.durability ~= nil then
+            -- This is an existing item with standard durability - set our custom field
+            metadata.plateDurability = metadata.durability
+            print(string.format("[SJArmor] createItem hook: Converting existing durability=%s to plateDurability for plate %s", 
+                tostring(metadata.durability), item.name))
+        else
+            -- This is a truly new item - set default values
             metadata.durability = 100
+            metadata.plateDurability = 100
+            print(string.format("[SJArmor] createItem hook: Setting default durability=100 for new plate %s", item.name))
         end
         
-        if not metadata.degrade then
-            metadata.degrade = 100
-        end
+        -- Debug: Log what we're returning
+        print(string.format("[SJArmor] createItem hook DEBUG: Returning metadata for %s: durability=%s, plateDurability=%s", 
+            item.name, tostring(metadata.durability), tostring(metadata.plateDurability)))
+        
     end
     
     if ContainerConfigs[item.name] then
@@ -199,7 +221,129 @@ end, {
         ceramic_plate = true,
         kevlar_plate = true,
         heavypc = true,
-        lightpc = true
+        lightpc = true,
+        mediumpc = true,
+    }
+})
+
+exports.ox_inventory:registerHook('swapItems', function(payload)
+    local toInv   = payload.toInventory
+    local fromInv = payload.fromInventory
+    local toSlot  = payload.toSlot
+
+    -- Get the moved item robustly (fromSlot can be an item table or a slot index)
+    local moved = payload.fromSlot
+    if type(moved) == 'number' then
+        moved = exports.ox_inventory:GetSlot(fromInv, moved)
+    end
+
+    -- Only handle known plate items
+    if not moved or not moved.name or not Config.Plates[moved.name] then
+        return true
+    end
+
+    -- Expected durability from the item being moved
+    local expected
+    if moved.metadata then
+        expected = moved.metadata.plateDurability or moved.metadata.durability
+    end
+    if expected == nil then
+        return true
+    end
+
+    -- Let ox_inventory finish the move, then correct ONLY the destination slot if needed
+    SetTimeout(50, function()
+        -- Prefer GetSlot for both player (number) and stash (string) inventories
+        local dest = exports.ox_inventory:GetSlot(toInv, toSlot)
+        if not dest then
+            -- Fallback read if GetSlot doesn't return for your build
+            local inv = (type(toInv) == 'string')
+                and exports.ox_inventory:GetInventory(toInv, false)   -- stash
+                or  exports.ox_inventory:GetInventory(toInv)          -- player
+            dest = inv and inv.items and inv.items[toSlot] or nil
+        end
+        if not dest then return end
+
+        local cur
+        if dest.metadata then
+            cur = dest.metadata.plateDurability or dest.metadata.durability
+        end
+
+        if cur ~= expected then
+            local meta = dest.metadata or {}
+            meta.plateDurability = expected
+            meta.durability      = expected
+            exports.ox_inventory:SetMetadata(toInv, toSlot, meta)
+            print(("[SJArmor] swapItems: fixed %s at slot %s: %s -> %s")
+                :format(moved.name, tostring(toSlot), tostring(cur), tostring(expected)))
+        end
+    end)
+
+    return true
+end, {
+    itemFilter = {
+        steel_plate   = true,
+        uhmwpe_plate  = true,
+        ceramic_plate = true,
+        kevlar_plate  = true,
+    },
+    typeFilter = {
+        player = true,
+        stash  = true
+    }
+})
+
+
+-- Hook to intercept addItems events and fix durability for armor plates
+exports.ox_inventory:registerHook('addItems', function(payload)
+    local items = payload.items
+    local inventory = payload.inventory
+    
+    -- Only process if this is a stash inventory (string ID)
+    if type(inventory) ~= 'string' then
+        return true
+    end
+    
+    -- Check if any of the added items are armor plates
+    for _, item in pairs(items) do
+        if item and Config.Plates[item.name] and item.metadata and item.metadata.plateDurability ~= nil then
+            local expectedDurability = item.metadata.plateDurability
+            
+            -- Add a small delay to let ox_inventory process the add
+            SetTimeout(50, function()
+                -- Check if durability was reset during the add
+                local stashInv = exports.ox_inventory:GetInventory(inventory, false)
+                if stashInv and stashInv.items then
+                    for slot, stashItem in pairs(stashInv.items) do
+                        if stashItem and stashItem.name == item.name then
+                            local currentDurability = stashItem.metadata and stashItem.metadata.plateDurability or stashItem.metadata and stashItem.metadata.durability or "nil"
+                            if currentDurability ~= expectedDurability then
+                                print(string.format("[SJArmor] addItems hook: Durability reset detected for %s from %s to %s, fixing...", 
+                                    item.name, tostring(expectedDurability), tostring(currentDurability)))
+                                
+                                local fixedMeta = stashItem.metadata or {}
+                                fixedMeta.plateDurability = expectedDurability
+                                fixedMeta.durability = expectedDurability
+                                
+                                exports.ox_inventory:SetMetadata(inventory, slot, fixedMeta)
+                                print(string.format("[SJArmor] addItems hook: Fixed durability in stash %s slot %s", inventory, slot))
+                            end
+                            break
+                        end
+                    end
+                end
+            end)
+            break
+        end
+    end
+    
+    return true
+end, {
+    itemFilter = {
+        steel_plate = true,
+        uhmwpe_plate = true,
+        ceramic_plate = true,
+        kevlar_plate = true,
     }
 })
 
@@ -267,7 +411,8 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
 end, {
     itemFilter = {
         heavypc = true,
-        lightpc = true
+        lightpc = true,
+        mediumpc = true,
     },
     typeFilter = {
         player = true,
@@ -388,7 +533,8 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
 end, {
     itemFilter = {
         heavypc = true,
-        lightpc = true
+        lightpc = true,
+        mediumpc = true,
     },
     typeFilter = {
         player = true,
@@ -488,9 +634,17 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                                     local lastPlateDurability = 100
                                     if newPlateCount == 1 then
                                         for slot, item in pairs(stashInv.items) do
-                                            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                                                lastPlateDurability = item.metadata.durability
-                                                break
+                                            if item and Config.Plates[item.name] then
+                                                local d = 100
+                                                if item.metadata and item.metadata.plateDurability ~= nil then
+                                                    d = item.metadata.plateDurability
+                                                elseif item.metadata and item.metadata.durability and item.metadata.durability > 0 then
+                                                    d = item.metadata.durability
+                                                end
+                                                if d > 0 then
+                                                    lastPlateDurability = d
+                                                    break
+                                                end
                                             end
                                         end
                                     end
@@ -690,9 +844,17 @@ RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType, prevDr
     local lastPlateDurability = 100
     if plateCount == 1 then
         for slotNum, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = 100
+                if item.metadata and item.metadata.plateDurability ~= nil then
+                    d = item.metadata.plateDurability
+                elseif item.metadata and item.metadata.durability and item.metadata.durability > 0 then
+                    d = item.metadata.durability
+                end
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -795,9 +957,17 @@ RegisterNetEvent('SJArmor:equipPlateCarrierFromSlot', function(targetSlot, metad
     local lastPlateDurability = 100
     if plateCount == 1 then
         for slotNum, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = 100
+                if item.metadata and item.metadata.plateDurability ~= nil then
+                    d = item.metadata.plateDurability
+                elseif item.metadata and item.metadata.durability and item.metadata.durability > 0 then
+                    d = item.metadata.durability
+                end
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -865,7 +1035,7 @@ RegisterNetEvent('SJArmor:unequipPlateCarrier', function()
     
     if stashInv then
         for slot, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability then
+            if item and Config.Plates[item.name] and (item.metadata.plateDurability or item.metadata.durability) then
                 exports.ox_inventory:SetMetadata(armorData.stashId, slot, item.metadata)
             end
         end
@@ -963,7 +1133,14 @@ RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
         end
         
         local durabilityLoss = remainingDamage * Config.DamageSettings.durabilityLossPerDamage
-        local currentDurability = currentPlate.item.metadata.durability or 100
+        -- Use actual durability from metadata, only default to 100 if metadata is completely missing
+        local currentDurability = 100
+        -- Check custom durability field first, then fallback to standard durability
+        if currentPlate.item.metadata and currentPlate.item.metadata.plateDurability ~= nil then
+            currentDurability = currentPlate.item.metadata.plateDurability
+        elseif currentPlate.item.metadata and currentPlate.item.metadata.durability ~= nil then
+            currentDurability = currentPlate.item.metadata.durability
+        end
         local newDurability = currentDurability - durabilityLoss
         
         if newDurability <= 0 then
@@ -990,6 +1167,7 @@ RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
             stashInv = exports.ox_inventory:GetInventory(armorData.stashId, false)
         else
             currentPlate.item.metadata.durability = math.max(0, newDurability)
+            currentPlate.item.metadata.plateDurability = math.max(0, newDurability)  -- Update custom field
             currentPlate.item.metadata.degrade = currentPlate.item.metadata.durability
             
             exports.ox_inventory:SetMetadata(armorData.stashId, currentPlate.slot, currentPlate.item.metadata)
@@ -1007,9 +1185,17 @@ RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
     local lastPlateDurability = 100
     if newPlateCount == 1 then
         for slot, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = 100
+                if item.metadata and item.metadata.plateDurability ~= nil then
+                    d = item.metadata.plateDurability
+                elseif item.metadata and item.metadata.durability and item.metadata.durability > 0 then
+                    d = item.metadata.durability
+                end
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -1069,9 +1255,17 @@ AddEventHandler('playerJoining', function()
                                 local lastPlateDurability = 100
                                 if plateCount == 1 then
                                     for slotNum, stashItem in pairs(stashInv.items) do
-                                        if stashItem and Config.Plates[stashItem.name] and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
-                                            lastPlateDurability = stashItem.metadata.durability
-                                            break
+                                        if stashItem and Config.Plates[stashItem.name] then
+                                            local d = 100
+                                            if stashItem.metadata and stashItem.metadata.plateDurability ~= nil then
+                                                d = stashItem.metadata.plateDurability
+                                            elseif stashItem.metadata and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
+                                                d = stashItem.metadata.durability
+                                            end
+                                            if d > 0 then
+                                                lastPlateDurability = d
+                                                break
+                                            end
                                         end
                                     end
                                 end
@@ -1149,9 +1343,17 @@ local function detectEquippedCarriers()
                                 local lastPlateDurability = 100
                                 if plateCount == 1 then
                                     for slotNum, stashItem in pairs(stashInv.items) do
-                                        if stashItem and Config.Plates[stashItem.name] and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
-                                            lastPlateDurability = stashItem.metadata.durability
-                                            break
+                                        if stashItem and Config.Plates[stashItem.name] then
+                                            local d = 100
+                                            if stashItem.metadata and stashItem.metadata.plateDurability ~= nil then
+                                                d = stashItem.metadata.plateDurability
+                                            elseif stashItem.metadata and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
+                                                d = stashItem.metadata.durability
+                                            end
+                                            if d > 0 then
+                                                lastPlateDurability = d
+                                                break
+                                            end
                                         end
                                     end
                                 end
@@ -1229,6 +1431,39 @@ AddEventHandler('onResourceStart', function(resourceName)
             end
                     
                     ::continue::
+                end
+            end
+        end)
+        
+        -- AGGRESSIVE DURABILITY PRESERVATION: Check all plate carrier stashes every 10 seconds
+        CreateThread(function()
+            while true do
+                Wait(10000)
+                
+                -- Check all registered stashes for durability issues
+                for stashId, stashInfo in pairs(registeredStashes) do
+                    local stashInv = exports.ox_inventory:GetInventory(stashId, false)
+                    if stashInv and stashInv.items then
+                        for slot, item in pairs(stashInv.items) do
+                            if item and Config.Plates[item.name] and item.metadata and item.metadata.plateDurability ~= nil then
+                                local expectedDurability = item.metadata.plateDurability
+                                local currentDurability = item.metadata.durability
+                                
+                                -- If durability was reset, fix it
+                                if currentDurability ~= expectedDurability then
+                                    print(string.format("[SJArmor] PERIODIC CHECK: Durability reset detected for %s in stash %s slot %s from %s to %s, fixing...", 
+                                        item.name, stashId, slot, tostring(expectedDurability), tostring(currentDurability)))
+                                    
+                                    local fixedMeta = item.metadata or {}
+                                    fixedMeta.plateDurability = expectedDurability
+                                    fixedMeta.durability = expectedDurability
+                                    
+                                    exports.ox_inventory:SetMetadata(stashId, slot, fixedMeta)
+                                    print(string.format("[SJArmor] PERIODIC CHECK: Fixed durability in stash %s slot %s", stashId, slot))
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end)
@@ -1405,7 +1640,14 @@ local function countActivePlates(stashInv)
     local count = 0
     for _, itm in pairs(stashInv.items) do
         if itm and Config.Plates[itm.name] then
-            local d = (itm.metadata and itm.metadata.durability) or Config.Plates[itm.name].durability or 100
+            -- Use actual durability from metadata, fallback to config default only if metadata is missing
+            local d = Config.Plates[itm.name].durability or 100
+            -- Check custom durability field first, then fallback to standard durability
+            if itm.metadata and itm.metadata.plateDurability ~= nil then
+                d = itm.metadata.plateDurability
+            elseif itm.metadata and itm.metadata.durability ~= nil then
+                d = itm.metadata.durability
+            end
             if d > 0 then count = count + 1 end
         end
     end
@@ -1493,8 +1735,32 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
         return fail('Your carrier is full.')
     end
 
-    -- durability check
-    local durability = (item.metadata and item.metadata.durability) or Config.Plates[item.name].durability or 100
+    -- durability check - get the item's actual metadata from the player's inventory slot
+    -- This bypasses any potential metadata processing that might happen during the "use" action
+    local actualItem = exports.ox_inventory:GetSlot(src, slot)
+    local durability = Config.Plates[item.name].durability or 100
+    
+    -- Debug: Log what we received vs what's actually in the slot
+    print(string.format("[SJArmor] DEBUG: item.metadata from use action: %s", json.encode(item.metadata or {})))
+    print(string.format("[SJArmor] DEBUG: actualItem.metadata from slot: %s", json.encode(actualItem and actualItem.metadata or {})))
+    
+    -- Check custom durability field first, then fallback to standard durability
+    if actualItem and actualItem.metadata and actualItem.metadata.plateDurability ~= nil then
+        durability = actualItem.metadata.plateDurability
+        print(string.format("[SJArmor] Using plateDurability from slot: %s", tostring(durability)))
+    elseif actualItem and actualItem.metadata and actualItem.metadata.durability ~= nil then
+        durability = actualItem.metadata.durability
+        print(string.format("[SJArmor] Using durability from slot: %s", tostring(durability)))
+    elseif item.metadata and item.metadata.plateDurability ~= nil then
+        durability = item.metadata.plateDurability
+        print(string.format("[SJArmor] Using plateDurability from use action: %s", tostring(durability)))
+    elseif item.metadata and item.metadata.durability ~= nil then
+        durability = item.metadata.durability
+        print(string.format("[SJArmor] Using durability from use action: %s", tostring(durability)))
+    else
+        print(string.format("[SJArmor] No durability found, using config default: %s", tostring(durability)))
+    end
+    
     if durability <= 0 then
         return fail('This plate is broken.')
     end
@@ -1508,23 +1774,87 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
         end
     end
 
-    -- clone metadata and normalize
+    -- clone metadata and normalize - use the actual item from the slot, not the processed metadata from the use action
     local newMeta = {}
-    if item.metadata then
+    if actualItem and actualItem.metadata then
+        for k, v in pairs(actualItem.metadata) do newMeta[k] = v end
+        print(string.format("[SJArmor] DEBUG: Cloned metadata from actual slot item: %s", json.encode(newMeta)))
+    elseif item.metadata then
         for k, v in pairs(item.metadata) do newMeta[k] = v end
+        print(string.format("[SJArmor] DEBUG: Cloned metadata from use action item: %s", json.encode(newMeta)))
     end
-    newMeta.durability = durability
-    newMeta.degrade    = newMeta.durability
+    
+    -- Store durability in a custom field that ox_inventory won't interfere with
+    newMeta.plateDurability = durability  -- Custom field to preserve actual durability
+    newMeta.durability = durability       -- Keep original for compatibility
     newMeta.weight     = Config.Plates[item.name].weight
+    
+    -- Debug: Log the final metadata that will be sent to the stash
+    print(string.format("[SJArmor] DEBUG: Final newMeta being sent to stash: %s", json.encode(newMeta)))
+    print(string.format("[SJArmor] Installing plate: durability=%s, newMeta.durability=%s, newMeta.plateDurability=%s", 
+        tostring(durability), tostring(newMeta.durability), tostring(newMeta.plateDurability)))
 
     -- add to carrier stash first
     local addOk = exports.ox_inventory:AddItem(stashId, item.name, 1, newMeta, nil)
     if not addOk then
         return fail('Could not install the plate.')
     end
+    
+    -- Debug: Check what durability the plate actually has in the stash
+    local stashInvAfterAdd = exports.ox_inventory:GetInventory(stashId, false)
+    if stashInvAfterAdd and stashInvAfterAdd.items then
+        for slot, stashItem in pairs(stashInvAfterAdd.items) do
+            if stashItem and stashItem.name == item.name then
+                local stashDurability = stashItem.metadata and stashItem.metadata.plateDurability or stashItem.metadata and stashItem.metadata.durability or "nil"
+                print(string.format("[SJArmor] Plate in stash after add: durability=%s", tostring(stashDurability)))
+                
+                -- If durability was reset, try to fix it immediately using the custom field
+                if stashDurability ~= durability then
+                    print(string.format("[SJArmor] WARNING: Durability was reset from %s to %s, attempting to fix...", tostring(durability), tostring(stashDurability)))
+                    local fixedMeta = stashItem.metadata or {}
+                    fixedMeta.plateDurability = durability  -- Use custom field
+                    fixedMeta.durability = durability       -- Also fix standard field for compatibility
+                    exports.ox_inventory:SetMetadata(stashId, slot, fixedMeta)
+                    
+                    -- Verify the fix
+                    local fixedItem = exports.ox_inventory:GetSlot(stashId, slot)
+                    if fixedItem and fixedItem.metadata and fixedItem.metadata.plateDurability == durability then
+                        print(string.format("[SJArmor] SUCCESS: Durability fixed to %s", tostring(durability)))
+                    else
+                        print(string.format("[SJArmor] ERROR: Failed to fix durability, item now has: %s", tostring(fixedItem and fixedItem.metadata and fixedItem.metadata.plateDurability or "nil")))
+                    end
+                end
+                break
+            end
+        end
+    end
+    
+    -- AGGRESSIVE FIX: Add a small delay and then force the durability back again
+    -- This handles cases where ox_inventory's hooks run after our immediate fix
+    SetTimeout(100, function()
+        local finalCheck = exports.ox_inventory:GetInventory(stashId, false)
+        if finalCheck and finalCheck.items then
+            for slot, stashItem in pairs(finalCheck.items) do
+                if stashItem and stashItem.name == item.name then
+                    local finalDurability = stashItem.metadata and stashItem.metadata.plateDurability or stashItem.metadata and stashItem.metadata.durability or "nil"
+                    if finalDurability ~= durability then
+                        print(string.format("[SJArmor] AGGRESSIVE FIX: Final durability check shows %s, forcing back to %s", tostring(finalDurability), tostring(durability)))
+                        local finalMeta = stashItem.metadata or {}
+                        finalMeta.plateDurability = durability
+                        finalMeta.durability = durability
+                        exports.ox_inventory:SetMetadata(stashId, slot, finalMeta)
+                    end
+                    break
+                end
+            end
+        end
+    end)
 
-    -- remove from player (only after successful add)
-    local removed = exports.ox_inventory:RemoveItem(src, item.name, 1, item.metadata, slot)
+    -- remove from player (only after successful add) - use the actual item metadata, not the processed use action metadata
+    local metadataToRemove = actualItem and actualItem.metadata or item.metadata
+    print(string.format("[SJArmor] DEBUG: Removing item with metadata: %s", json.encode(metadataToRemove or {})))
+    
+    local removed = exports.ox_inventory:RemoveItem(src, item.name, 1, metadataToRemove, slot)
     if not removed then
         -- rollback to avoid dupes
         exports.ox_inventory:RemoveItem(stashId, item.name, 1, newMeta)
@@ -1536,13 +1866,33 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
     local newVirtualArmor, newPlateCount = calculateVirtualArmor(invNow)
     armorData.virtualArmor = newVirtualArmor
     armorData.plateCount   = newPlateCount
+    
+    -- Final debug: Check what the plate looks like after all processing
+    if invNow and invNow.items then
+        for slot, stashItem in pairs(invNow.items) do
+            if stashItem and stashItem.name == item.name then
+                local finalDurability = stashItem.metadata and stashItem.metadata.plateDurability or stashItem.metadata and stashItem.metadata.durability or "nil"
+                print(string.format("[SJArmor] FINAL DEBUG: Plate in stash after all processing - durability=%s, plateDurability=%s", 
+                    tostring(stashItem.metadata and stashItem.metadata.durability or "nil"), 
+                    tostring(stashItem.metadata and stashItem.metadata.plateDurability or "nil")))
+                break
+            end
+        end
+    end
 
     -- last plate durability if only one plate
     local lastPlateDurability = 100
     if newPlateCount == 1 and invNow and invNow.items then
         for _, it in pairs(invNow.items) do
             if it and Config.Plates[it.name] then
-                local d = (it.metadata and it.metadata.durability) or 100
+                -- Use actual durability from metadata, fallback to config default only if metadata is missing
+                local d = Config.Plates[it.name].durability or 100
+                -- Check custom durability field first, then fallback to standard durability
+                if it.metadata and it.metadata.plateDurability ~= nil then
+                    d = it.metadata.plateDurability
+                elseif it.metadata and it.metadata.durability ~= nil then
+                    d = it.metadata.durability
+                end
                 if d > 0 then lastPlateDurability = d break end
             end
         end
