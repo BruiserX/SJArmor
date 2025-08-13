@@ -12,32 +12,32 @@ Config.Plates = {
     ['steel_plate'] = {
         label = 'Steel Plate',
         weight = 4536, -- Match to items.lua
-        durability = 100, -- Durability rating (higher = takes less damage)
-        protection = 100, -- Virtual protection value (most protective)
+        durability = 150, -- Durability rating (higher = takes less damage)
+        protection = 150, -- Virtual protection value (most protective)
         brokenItem = 'brokenplate',
         tier = 1 -- Highest tier = most durable
     },
     ['uhmwpe_plate'] = {
         label = 'UHMWPE Plate',
         weight = 1814, -- Match to items.lua
-        durability = 75, -- Durability rating (takes less damage than steel)
-        protection = 75, -- Virtual protection value (3rd most protective)
+        durability = 125, -- Durability rating (takes less damage than steel)
+        protection = 125, -- Virtual protection value (3rd most protective)
         brokenItem = 'brokenplate',
         tier = 2
     },
     ['ceramic_plate'] = {
         label = 'Ceramic Plate',
         weight = 3175, -- Match to items.lua
-        durability = 50, -- Durability rating (takes more damage than steel)
-        protection = 50, -- Virtual protection value (2nd least protective)
+        durability = 100, -- Durability rating (takes more damage than steel)
+        protection = 100, -- Virtual protection value (2nd least protective)
         brokenItem = 'brokenplate',
         tier = 3
     },
     ['kevlar_plate'] = {
         label = 'Kevlar Plate',
         weight = 1361, -- Match to items.lua
-        durability = 25, -- Durability rating (takes most damage)
-        protection = 25, -- Virtual protection value (least protective)
+        durability = 75, -- Durability rating (takes most damage)
+        protection = 75, -- Virtual protection value (least protective)
         brokenItem = 'brokenplate',
         tier = 4 -- Lowest tier = least durable
     }
@@ -45,7 +45,7 @@ Config.Plates = {
 
 -- Animation and progress bar settings
 Config.EquipSettings = {
-    useTime = 8000, -- 3 seconds
+    useTime = 3000, -- 3 seconds
     animation = {
         dict = 'clothingshirt',
         clip = 'try_shirt_positive_d'
@@ -54,7 +54,7 @@ Config.EquipSettings = {
 }
 
 Config.UnequipSettings = {
-    useTime = 5000, 
+    useTime = 2000, 
     animation = {
         dict = 'clothingshirt',
         clip = 'try_shirt_negative_a'
