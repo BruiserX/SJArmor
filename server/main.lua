@@ -29,6 +29,20 @@ local function deepMerge(base, override)
     return out
 end
 
+-- Helper to get durability, preferring metadata.durability then metadata.degrade, otherwise config/default 100
+local function getDurabilityFromMetadata(metadata, plateName)
+    local d = nil
+    if type(metadata) == 'table' then
+        if type(metadata.durability) == 'number' then d = metadata.durability end
+        if d == nil and type(metadata.degrade) == 'number' then d = metadata.degrade end
+    end
+    if d == nil then
+        local cfg = Config.Plates[plateName]
+        d = (cfg and cfg.durability) or 100
+    end
+    return d
+end
+
 -- Calculate total virtual armor from plates in a stash
 local function calculateVirtualArmor(stashInventory)
     local totalArmor = 0
@@ -41,7 +55,7 @@ local function calculateVirtualArmor(stashInventory)
     for slot, item in pairs(stashInventory.items) do
         if item and Config.Plates[item.name] then
             local plateConfig = Config.Plates[item.name]
-            local durability = item.metadata.durability or 100
+            local durability = getDurabilityFromMetadata(item.metadata, item.name)
             
             if durability > 0 then
                 totalArmor = totalArmor + plateConfig.protection
@@ -109,7 +123,7 @@ local function getNextPlateToBreak(stashInventory)
     for slot, item in pairs(stashInventory.items) do
         if item and Config.Plates[item.name] then
             local plateConfig = Config.Plates[item.name]
-            local durability = item.metadata.durability or plateConfig.durability
+            local durability = getDurabilityFromMetadata(item.metadata, item.name)
             
             if durability > 0 and plateConfig.tier < bestTier then
                 bestTier = plateConfig.tier
@@ -152,12 +166,14 @@ exports.ox_inventory:registerHook('createItem', function(payload)
     if Config.Plates[item.name] then
         local plateConfig = Config.Plates[item.name]
         
-        if not metadata.durability then
-            metadata.durability = 100
+        if metadata.durability == nil and metadata.degrade ~= nil then
+            metadata.durability = metadata.degrade
+        elseif metadata.durability == nil then
+            metadata.durability = (plateConfig and plateConfig.durability) or 100
         end
         
-        if not metadata.degrade then
-            metadata.degrade = 100
+        if metadata.degrade == nil then
+            metadata.degrade = metadata.durability
         end
     end
     
@@ -690,9 +706,12 @@ RegisterNetEvent('SJArmor:equipPlateCarrier', function(slot, carrierType, prevDr
     local lastPlateDurability = 100
     if plateCount == 1 then
         for slotNum, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = getDurabilityFromMetadata(item.metadata, item.name)
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -795,9 +814,12 @@ RegisterNetEvent('SJArmor:equipPlateCarrierFromSlot', function(targetSlot, metad
     local lastPlateDurability = 100
     if plateCount == 1 then
         for slotNum, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = getDurabilityFromMetadata(item.metadata, item.name)
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -963,7 +985,7 @@ RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
         end
         
         local durabilityLoss = remainingDamage * Config.DamageSettings.durabilityLossPerDamage
-        local currentDurability = currentPlate.item.metadata.durability or 100
+        local currentDurability = (currentPlate.item.metadata and (currentPlate.item.metadata.durability or currentPlate.item.metadata.degrade)) or 100
         local newDurability = currentDurability - durabilityLoss
         
         if newDurability <= 0 then
@@ -1007,9 +1029,12 @@ RegisterNetEvent('SJArmor:armorDamaged', function(damageAmount)
     local lastPlateDurability = 100
     if newPlateCount == 1 then
         for slot, item in pairs(stashInv.items) do
-            if item and Config.Plates[item.name] and item.metadata.durability and item.metadata.durability > 0 then
-                lastPlateDurability = item.metadata.durability
-                break
+            if item and Config.Plates[item.name] then
+                local d = getDurabilityFromMetadata(item.metadata, item.name)
+                if d > 0 then
+                    lastPlateDurability = d
+                    break
+                end
             end
         end
     end
@@ -1069,9 +1094,12 @@ AddEventHandler('playerJoining', function()
                                 local lastPlateDurability = 100
                                 if plateCount == 1 then
                                     for slotNum, stashItem in pairs(stashInv.items) do
-                                        if stashItem and Config.Plates[stashItem.name] and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
-                                            lastPlateDurability = stashItem.metadata.durability
-                                            break
+                                        if stashItem and Config.Plates[stashItem.name] then
+                                            local d = getDurabilityFromMetadata(stashItem.metadata, stashItem.name)
+                                            if d > 0 then
+                                                lastPlateDurability = d
+                                                break
+                                            end
                                         end
                                     end
                                 end
@@ -1149,9 +1177,12 @@ local function detectEquippedCarriers()
                                 local lastPlateDurability = 100
                                 if plateCount == 1 then
                                     for slotNum, stashItem in pairs(stashInv.items) do
-                                        if stashItem and Config.Plates[stashItem.name] and stashItem.metadata.durability and stashItem.metadata.durability > 0 then
-                                            lastPlateDurability = stashItem.metadata.durability
-                                            break
+                                        if stashItem and Config.Plates[stashItem.name] then
+                                            local d = getDurabilityFromMetadata(stashItem.metadata, stashItem.name)
+                                            if d > 0 then
+                                                lastPlateDurability = d
+                                                break
+                                            end
                                         end
                                     end
                                 end
@@ -1494,7 +1525,7 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
     end
 
     -- durability check
-    local durability = (item.metadata and item.metadata.durability) or Config.Plates[item.name].durability or 100
+    local durability = getDurabilityFromMetadata(item.metadata, item.name)
     if durability <= 0 then
         return fail('This plate is broken.')
     end
@@ -1542,7 +1573,7 @@ exports('useArmorPlate', function(event, item, inventory, slot, data)
     if newPlateCount == 1 and invNow and invNow.items then
         for _, it in pairs(invNow.items) do
             if it and Config.Plates[it.name] then
-                local d = (it.metadata and it.metadata.durability) or 100
+                local d = getDurabilityFromMetadata(it.metadata, it.name)
                 if d > 0 then lastPlateDurability = d break end
             end
         end
